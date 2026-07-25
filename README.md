@@ -15,12 +15,12 @@ The canonical system design is [`architecture.md`](architecture.md). Public cont
 - Cache API for aggregate, per-engine and negative responses
 - stateless and KV engine-state adapters plus a Durable Object coordinator contract
 - arXiv Atom, Wikipedia HTML, DuckDuckGo HTML, Brave Web HTML and Qwant Web JSON adapters
-- default fan-out across five adapters, including three independent general-web providers
+- four default-enabled adapters, including DuckDuckGo and Brave as independent general-web providers
 - Unicode NFC query normalisation, URL canonicalisation, exact canonical-URL deduplication
 - `rrf-v1` and `searx-compat-v1` ranking
 - structured logs and optional Analytics Engine events
 
-Brave and Qwant complete the canonical architecture's Milestone 5 provider-diversity slice. Each provider has a fixed host allow-list, bounded request construction, fixture-backed parsing and independent partial-failure semantics. Their public frontend contracts remain provider-controlled and may change without notice.
+Brave completes the canonical architecture's Milestone 5 default provider-diversity goal. Qwant is implemented and available for explicit requests, but remains default-disabled because its public frontend challenged Cloudflare preview egress during delivery validation. Each provider has a fixed host allow-list, bounded request construction, fixture-backed parsing and independent partial-failure semantics. Their public frontend contracts remain provider-controlled and may change without notice.
 
 ## Prerequisites
 
@@ -78,7 +78,7 @@ curl -H 'Authorization: Bearer replace-with-a-long-random-key' \
   'http://127.0.0.1:8787/v1/search?q=cloudflare+rust'
 ```
 
-Select only the independent general-web providers:
+Explicitly request all registered general-web providers, including default-disabled Qwant:
 
 ```bash
 curl -H 'Authorization: Bearer replace-with-a-long-random-key' \
