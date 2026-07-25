@@ -1,13 +1,10 @@
 use metasearch_core::{
-    BoundedResponse, Deadline, EngineDescriptor, EngineFailure, EngineHttpClient, EngineMethod,
-    EngineRequest, FailureKind,
+    BoundedResponse, Deadline, EngineDescriptor, EngineFailure, EngineHttpClient, EngineRequest,
+    FailureKind,
 };
-use std::collections::BTreeMap;
 use url::Url;
 
 const CHALLENGE_SCAN_LIMIT: usize = 64 * 1024;
-const SENSITIVE_HEADERS: &[&str] = &["authorization", "cookie", "proxy-authorization"];
-
 #[derive(Debug, Default, Clone, Copy)]
 pub struct WorkerFetchClient;
 
@@ -50,6 +47,7 @@ pub fn validate_destination(
     Ok(())
 }
 
+#[cfg(any(target_arch = "wasm32", test))]
 fn content_type_matches(actual: Option<&str>, accepted: &[&str]) -> bool {
     let Some(actual) = actual else { return false };
     let media_type = actual
@@ -114,20 +112,23 @@ pub fn classify_challenge(engine_id: &str, status: u16, body: &[u8]) -> Option<E
     None
 }
 
-fn strip_sensitive_headers(headers: &mut BTreeMap<String, String>) {
-    headers.retain(|name, _| {
-        !SENSITIVE_HEADERS
-            .iter()
-            .any(|sensitive| name.eq_ignore_ascii_case(sensitive))
-    });
-}
-
 #[cfg(target_arch = "wasm32")]
 mod wasm {
     use super::*;
     use futures_util::{future::Either, pin_mut, TryStreamExt};
     use js_sys::Uint8Array;
-    use std::time::Duration;
+    use metasearch_core::EngineMethod;
+    use std::{collections::BTreeMap, time::Duration};
+
+    const SENSITIVE_HEADERS: &[&str] = &["authorization", "cookie", "proxy-authorization"];
+
+    fn strip_sensitive_headers(headers: &mut BTreeMap<String, String>) {
+        headers.retain(|name, _| {
+            !SENSITIVE_HEADERS
+                .iter()
+                .any(|sensitive| name.eq_ignore_ascii_case(sensitive))
+        });
+    }
     use wasm_bindgen::JsValue;
     use worker::{
         AbortController, Date, Delay, Fetch, Headers, Method, Request, RequestInit, RequestRedirect,
