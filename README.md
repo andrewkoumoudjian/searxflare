@@ -21,32 +21,36 @@ The canonical system design is [`architecture.md`](architecture.md). Public cont
 
 ## Prerequisites
 
-- Rust 1.97.1 with `wasm32-unknown-unknown`
 - Node.js 22 or newer
-- `worker-build` 0.8.5
-- Wrangler 4
+- Python 3 for schema validation
+- `curl` for automatic Rust installation when the pinned toolchain is absent
+
+Rust 1.97.1, the `wasm32-unknown-unknown` target and `worker-build` 0.8.5 are pinned by the repository. `scripts/build_worker.sh` installs missing Rust build tools and always validates `Cargo.lock` before compiling.
+
+Install the locked JavaScript dependencies:
 
 ```bash
-rustup target add wasm32-unknown-unknown
-cargo install worker-build --version 0.8.5 --locked
-npm install
+npm ci
 ```
 
 ## Build and test
 
 ```bash
 cargo fmt --check
-cargo clippy --workspace --all-targets --all-features -- -D warnings
-cargo test --workspace
-cargo build --workspace --target wasm32-unknown-unknown
+cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
+cargo test --locked --workspace
+cargo build --locked --workspace --target wasm32-unknown-unknown
 npm run validate:specs
 npm test
 npm run bundle
+npm run bundle:size
 ```
+
+`npm test` builds the Worker and runs the integration suite inside Cloudflare's workerd-based Vitest pool. `npm run bundle` performs a Wrangler dry-run into `dist/`.
 
 ## Local development
 
-Create `.dev.vars` (never commit it):
+Create `.dev.vars` and never commit it:
 
 ```text
 API_KEY_SHA256=<lowercase SHA-256 hex of the bearer key>
@@ -73,7 +77,7 @@ curl -H 'Authorization: Bearer replace-with-a-long-random-key' \
 
 ## Deployment
 
-See [`docs/deployment.md`](docs/deployment.md). A local endpoint working does not prove that the same provider permits Cloudflare production egress.
+See [`docs/deployment.md`](docs/deployment.md) for Wrangler and Cloudflare Git integration settings. A local endpoint working does not prove that the same provider permits Cloudflare production egress.
 
 ## Operational boundaries
 
