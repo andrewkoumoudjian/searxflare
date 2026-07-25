@@ -145,7 +145,7 @@ fn classify_api_error(root: &Value) -> EngineFailure {
     EngineFailure::new(DESCRIPTOR.id, FailureKind::EngineParseFailed, message)
 }
 
-fn collect_web_items<'a>(root: &'a Value) -> Result<Vec<&'a Value>, EngineFailure> {
+fn collect_web_items(root: &Value) -> Result<Vec<&Value>, EngineFailure> {
     let items = root.pointer("/data/result/items").ok_or_else(|| {
         EngineFailure::new(
             DESCRIPTOR.id,
