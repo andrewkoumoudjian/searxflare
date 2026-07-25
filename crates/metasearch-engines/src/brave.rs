@@ -69,11 +69,7 @@ fn time_range_code(value: Option<TimeRange>) -> Option<&'static str> {
 }
 
 fn locale_parts(query: &NormalizedQuery) -> (String, String) {
-    let mut parts = query
-        .locale
-        .as_deref()
-        .unwrap_or("en-US")
-        .split(['-', '_']);
+    let mut parts = query.locale.as_deref().unwrap_or("en-US").split(['-', '_']);
     let language = parts.next().unwrap_or("en").to_ascii_lowercase();
     let country = query
         .country
@@ -99,7 +95,9 @@ fn build_request(query: &NormalizedQuery) -> Result<EngineRequest, EngineFailure
     })?;
     {
         let mut pairs = url.query_pairs_mut();
-        pairs.append_pair("q", &query.text).append_pair("source", "web");
+        pairs
+            .append_pair("q", &query.text)
+            .append_pair("source", "web");
         if page > 1 {
             pairs.append_pair("offset", &(page - 1).to_string());
         }
@@ -130,7 +128,10 @@ fn build_request(query: &NormalizedQuery) -> Result<EngineRequest, EngineFailure
             ),
         ]),
         cookies: BTreeMap::from([
-            ("safesearch".into(), safe_search_cookie(query.safe_search).into()),
+            (
+                "safesearch".into(),
+                safe_search_cookie(query.safe_search).into(),
+            ),
             ("useLocation".into(), "0".into()),
             ("summarizer".into(), "0".into()),
             ("country".into(), country),
@@ -233,8 +234,14 @@ mod tests {
         let parameters: BTreeMap<_, _> = request.url.query_pairs().into_owned().collect();
         assert_eq!(parameters.get("offset").map(String::as_str), Some("1"));
         assert_eq!(parameters.get("tf").map(String::as_str), Some("pm"));
-        assert_eq!(request.cookies.get("country").map(String::as_str), Some("ca"));
-        assert_eq!(request.cookies.get("ui_lang").map(String::as_str), Some("fr-ca"));
+        assert_eq!(
+            request.cookies.get("country").map(String::as_str),
+            Some("ca")
+        );
+        assert_eq!(
+            request.cookies.get("ui_lang").map(String::as_str),
+            Some("fr-ca")
+        );
         assert_eq!(
             request.cookies.get("safesearch").map(String::as_str),
             Some("strict")
