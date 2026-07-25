@@ -61,9 +61,9 @@ mod tests {
         let left_engines = vec!["wikipedia".into(), "arxiv".into()];
         let right_engines = vec!["arxiv".into(), "wikipedia".into()];
         let parser_versions = vec!["a:1".into(), "b:2".into()];
-        let make = |engines: &[String]| CacheKeyInput {
+        let left = CacheKeyInput {
             normalized_query: "rust",
-            engine_ids: engines,
+            engine_ids: &left_engines,
             categories: &[],
             page: Some(1),
             cursor_hash: None,
@@ -75,9 +75,11 @@ mod tests {
             parser_versions: &parser_versions,
             ranking: RankingStrategy::RrfV1,
         };
-        assert_eq!(
-            build_cache_key(&make(&left_engines)),
-            build_cache_key(&make(&right_engines))
-        );
+        let right = CacheKeyInput {
+            engine_ids: &right_engines,
+            ..left.clone()
+        };
+
+        assert_eq!(build_cache_key(&left), build_cache_key(&right));
     }
 }
