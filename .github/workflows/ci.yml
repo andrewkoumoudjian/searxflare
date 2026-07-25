@@ -23,17 +23,23 @@ jobs:
           target: wasm32-unknown-unknown
           components: rustfmt,clippy
       - uses: Swatinem/rust-cache@v2
-      - name: Cache worker-build
+      - name: Restore worker-build cache
         id: worker-build-cache
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: ~/.cargo/bin/worker-build
-          key: worker-build-${{ runner.os }}-rust-1.97.1-v0.8.5
-      - name: Install validators
-        run: python3 -m pip install --disable-pip-version-check jsonschema openapi-spec-validator pyyaml
+          key: worker-build-${{ runner.os }}-${{ runner.arch }}-rust-1.97.1-v0.8.5
       - name: Install worker-build
         if: steps.worker-build-cache.outputs.cache-hit != 'true'
         run: cargo install worker-build --version 0.8.5 --locked
+      - name: Save worker-build cache
+        if: steps.worker-build-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.cargo/bin/worker-build
+          key: worker-build-${{ runner.os }}-${{ runner.arch }}-rust-1.97.1-v0.8.5
+      - name: Install validators
+        run: python3 -m pip install --disable-pip-version-check jsonschema openapi-spec-validator pyyaml
       - name: Install JavaScript test tools
         run: npm install
       - name: Formatting
