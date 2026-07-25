@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  issues: write
 
 jobs:
   verify:
@@ -76,3 +77,11 @@ jobs:
         run: |
           echo '## Bundle size' >> "$GITHUB_STEP_SUMMARY"
           cat bundle-size.txt >> "$GITHUB_STEP_SUMMARY"
+      - name: Publish temporary diagnostic breadcrumb
+        if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api "repos/${GITHUB_REPOSITORY}/issues/1/comments" \
+            --method POST \
+            --field body="Temporary CI diagnostic: run ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID} for commit ${GITHUB_SHA}. This breadcrumb will be removed from the workflow after CI is green."
