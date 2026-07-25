@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xmlns:arxiv="http://arxiv.org/schemas/atom">
+  <entry>
+    <id>https://arxiv.org/abs/1234.5678v1</id>
+    <title>Cloudflare Rust</title>
+    <summary>A bounded metasearch paper.</summary>
+    <published>2026-01-02T03:04:05Z</published>
+    <author><name>Ada Example</name></author>
+    <link title="pdf" href="https://arxiv.org/pdf/1234.5678v1" type="application/pdf" />
+    <category term="cs.IR" />
+    <arxiv:doi>10.1000/example</arxiv:doi>
+    <arxiv:journal_ref>Example Journal</arxiv:journal_ref>
+    <arxiv:comment>12 pages</arxiv:comment>
+  </entry>
+</feed>

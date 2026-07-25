@@ -1,0 +1,19 @@
+{
+  "name": "searxflare",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:worker": "cd crates/metasearch-worker && worker-build --release",
+    "dev": "npm run build:worker && wrangler dev",
+    "test": "npm run test:worker",
+    "test:worker": "npm run build:worker && vitest run",
+    "validate:specs": "python3 scripts/validate_specs.py",
+    "bundle": "npm run build:worker && wrangler deploy --dry-run --outdir dist",
+    "bundle:size": "python3 scripts/bundle_size.py dist"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "0.18.6",
+    "vitest": "^4.1.0",
+    "wrangler": "^4.112.0"
+  }
+}
