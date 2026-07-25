@@ -49,11 +49,7 @@ fn safe_search_code(value: SafeSearch) -> &'static str {
 }
 
 fn locale_code(query: &NormalizedQuery) -> String {
-    let mut parts = query
-        .locale
-        .as_deref()
-        .unwrap_or("en-US")
-        .split(['-', '_']);
+    let mut parts = query.locale.as_deref().unwrap_or("en-US").split(['-', '_']);
     let language = parts.next().unwrap_or("en").to_ascii_lowercase();
     let country = query
         .country
@@ -150,15 +146,13 @@ fn classify_api_error(root: &Value) -> EngineFailure {
 }
 
 fn collect_web_items<'a>(root: &'a Value) -> Result<Vec<&'a Value>, EngineFailure> {
-    let items = root
-        .pointer("/data/result/items")
-        .ok_or_else(|| {
-            EngineFailure::new(
-                DESCRIPTOR.id,
-                FailureKind::EngineParseFailed,
-                "Qwant response is missing data.result.items",
-            )
-        })?;
+    let items = root.pointer("/data/result/items").ok_or_else(|| {
+        EngineFailure::new(
+            DESCRIPTOR.id,
+            FailureKind::EngineParseFailed,
+            "Qwant response is missing data.result.items",
+        )
+    })?;
 
     if let Some(direct) = items.as_array() {
         return Ok(direct.iter().collect());
