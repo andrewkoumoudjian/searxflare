@@ -183,7 +183,7 @@ pub struct NormalizedResult {
     pub metadata: Map<String, Value>,
     pub engines: Vec<String>,
     pub positions: BTreeMap<String, u32>,
-    #[serde(skip_serializing)]
+    #[serde(default, skip_serializing)]
     pub contributions: Vec<EngineContribution>,
     pub score: f64,
 }
@@ -273,4 +273,39 @@ pub struct BoundedResponse {
     pub final_url: Url,
     pub redirect_count: u8,
     pub duration_ms: u64,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn normalized_result_round_trips_without_internal_contributions() {
+        let result = NormalizedResult {
+            url: "https://example.com/result".into(),
+            canonical_url: "https://example.com/result".into(),
+            title: "Example result".into(),
+            content: "Result content".into(),
+            published_at: None,
+            thumbnail: None,
+            category: "general".into(),
+            metadata: Map::new(),
+            engines: vec!["example".into()],
+            positions: BTreeMap::from([("example".into(), 1)]),
+            contributions: vec![EngineContribution {
+                engine_id: "example".into(),
+                position: 1,
+                weight: 1.0,
+            }],
+            score: 1.0,
+        };
+
+        let encoded = serde_json::to_value(&result).unwrap();
+        assert!(encoded.get("contributions").is_none());
+
+        let decoded: NormalizedResult = serde_json::from_value(encoded).unwrap();
+        assert!(decoded.contributions.is_empty());
+        assert_eq!(decoded.url, result.url);
+        assert_eq!(decoded.engines, result.engines);
+    }
 }
