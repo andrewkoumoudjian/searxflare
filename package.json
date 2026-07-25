@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "bash scripts/build_worker.sh",
+    "build": "npm run test:worker",
     "build:worker": "bash scripts/build_worker.sh",
     "dev": "npm run build:worker && wrangler dev",
     "test": "npm run test:worker",
