@@ -576,9 +576,10 @@ async fn execute_search(
     let mut reports = Vec::new();
     let mut normalized = Vec::new();
     let mut failures = Vec::new();
+    let mut successful_engines = 0usize;
     while let Some(run) = futures.next().await {
-        reports.push(run.report);
-        match run.output {
+        let EngineRun { output, mut report } = run;
+        match output {
             Ok(output) => {
                 let mut engine_invalid = None;
                 let mut engine_results = Vec::new();
@@ -592,22 +593,31 @@ async fn execute_search(
                     }
                 }
                 if let Some(message) = engine_invalid {
+                    report.result_count = 0;
+                    report.failure_kind = Some(FailureKind::EngineParseFailed.as_code().into());
                     failures.push(EngineFailure::new(
-                        "normalization",
+                        report.engine_id.clone(),
                         FailureKind::EngineParseFailed,
                         message,
                     ));
                 } else {
+                    successful_engines += 1;
                     normalized.extend(engine_results);
                 }
             }
             Err(failure) => failures.push(failure),
         }
+        reports.push(report);
     }
     reports.sort_by(|left, right| left.engine_id.cmp(&right.engine_id));
 
-    if normalized.is_empty() && !failures.is_empty() {
-        let first = &failures[0];
+    if successful_engines == 0 {
+        let first = failures.first().ok_or_else(|| {
+            ApiError::new(
+                ErrorCode::InternalError,
+                "engine execution completed without a success or failure",
+            )
+        })?;
         return Err(ApiError::new(
             ErrorCode::NoEngineSucceeded,
             format!(

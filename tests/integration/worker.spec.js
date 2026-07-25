@@ -24,7 +24,7 @@ const DUCKDUCKGO = `<!doctype html><html><body><div id="links">
 <div class="web-result"><h2><a href="https://duckduckgo.com/l/?uddg=https%3A%2F%2Fexample.com%2Fcloudflare">Example result</a></h2><a class="result__snippet">Web result.</a></div>
 </div></body></html>`;
 
-function mockProviders({ duckFailure = false, delayArxiv = false } = {}) {
+function mockProviders({ duckFailure = false, delayArxiv = false, emptyWikipedia = false } = {}) {
   const mock = vi.fn(async (input, init) => {
     const request = input instanceof Request ? input : new Request(input, init);
     const url = new URL(request.url);
@@ -37,7 +37,8 @@ function mockProviders({ duckFailure = false, delayArxiv = false } = {}) {
       return new Response(ARXIV, { status: 200, headers: { "content-type": "application/atom+xml" } });
     }
     if (url.hostname.endsWith("wikipedia.org")) {
-      return new Response(WIKIPEDIA, { status: 200, headers: { "content-type": "text/html; charset=UTF-8" } });
+      const body = emptyWikipedia ? "<!doctype html><html><body><ul class=\"mw-search-results\"></ul></body></html>" : WIKIPEDIA;
+      return new Response(body, { status: 200, headers: { "content-type": "text/html; charset=UTF-8" } });
     }
     if (url.hostname === "html.duckduckgo.com") {
       if (duckFailure) {
@@ -93,6 +94,17 @@ describe("Worker routes", () => {
     expect(body.results.length).toBeGreaterThanOrEqual(2);
     expect(body.engines.some((engine) => engine.failure_kind === "ENGINE_CHALLENGED")).toBe(true);
     expect(body.results.every((result) => result.canonical_url.startsWith("http"))).toBe(true);
+  });
+
+  it("keeps an empty successful engine as a partial response", async () => {
+    mockProviders({ duckFailure: true, emptyWikipedia: true });
+    const response = await exports.default.fetch(new Request("https://example.com/v1/search?q=missing&engines=wikipedia,duckduckgo-html", { headers: AUTH }));
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.partial).toBe(true);
+    expect(body.results).toEqual([]);
+    expect(body.engines.find((engine) => engine.engine_id === "wikipedia").failure_kind).toBeUndefined();
+    expect(body.engines.find((engine) => engine.engine_id === "duckduckgo-html").failure_kind).toBe("ENGINE_CHALLENGED");
   });
 
   it("returns NO_ENGINE_SUCCEEDED when the only engine times out", async () => {
