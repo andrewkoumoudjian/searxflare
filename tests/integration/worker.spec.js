@@ -1,4 +1,5 @@
 import { exports } from "cloudflare:workers";
+import { createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const AUTH = { authorization: "Bearer test-api-key" };
@@ -190,13 +191,12 @@ describe("Worker routes", () => {
   it("reuses the aggregate Cache API entry", async () => {
     const mock = mockProviders();
     const request = () => new Request("https://example.com/v1/search?q=cache-test&engines=wikipedia", { headers: AUTH });
-    const first = await exports.default.fetch(request());
+    const ctx = createExecutionContext();
+    const first = await ctx.exports.default.fetch(request());
     expect(first.status).toBe(200);
     expect((await first.json()).cached).toBe(false);
 
-    // The production path intentionally persists cache entries through ctx.waitUntil().
-    // Leave a bounded settling window for the asynchronous Cache API write under loaded CI.
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    await waitOnExecutionContext(ctx);
 
     const second = await exports.default.fetch(request());
     expect(second.status).toBe(200);
