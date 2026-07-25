@@ -31,5 +31,7 @@ if ! command -v worker-build >/dev/null 2>&1 \
   cargo "+$RUST_TOOLCHAIN" install worker-build --version "$WORKER_BUILD_VERSION" --locked
 fi
 
+cd "$ROOT_DIR"
+cargo "+$RUST_TOOLCHAIN" metadata --locked --no-deps --format-version 1 >/dev/null
 cd "$ROOT_DIR/crates/metasearch-worker"
 exec worker-build --release
