@@ -1,5 +1,7 @@
 mod arxiv;
+mod brave;
 mod duckduckgo_html;
+mod qwant;
 mod registry;
 mod wikipedia;
 
