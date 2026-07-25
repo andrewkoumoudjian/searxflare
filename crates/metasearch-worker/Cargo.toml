@@ -1,0 +1,25 @@
+[package]
+name = "metasearch-worker"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+futures-util.workspace = true
+metasearch-api = { path = "../metasearch-api" }
+metasearch-core = { path = "../metasearch-core" }
+metasearch-engines = { path = "../metasearch-engines" }
+metasearch-http = { path = "../metasearch-http" }
+metasearch-state = { path = "../metasearch-state" }
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+subtle.workspace = true
+url.workspace = true
+uuid.workspace = true
+worker.workspace = true
