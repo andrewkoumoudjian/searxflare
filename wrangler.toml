@@ -4,7 +4,7 @@ compatibility_date = "2026-07-24"
 workers_dev = true
 
 [build]
-command = "cd crates/metasearch-worker && worker-build --release"
+command = "bash scripts/build_worker.sh"
 
 [observability]
 enabled = true
