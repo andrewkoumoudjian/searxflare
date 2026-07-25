@@ -21,6 +21,6 @@ versions:
 cache:
   response_ttl_seconds: 180
   negative_ttl_seconds: 30
-state: kv_snapshot
+state: stateless
 default_enabled: true
-notes: Clean-room Rust implementation informed by SearXNG searx/engines/qwant.py at 0909dbc9efb2c6e93e2ad51e60e66417ab291710. Uses the fixed public frontend JSON endpoint with bounded paging, locale, safe-search and explicit challenge or rate-limit classification. A future KV adapter may persist non-critical DataDome snapshots; the engine remains safe without one.
+notes: Clean-room Rust implementation informed by SearXNG searx/engines/qwant.py at 0909dbc9efb2c6e93e2ad51e60e66417ab291710. Uses the fixed public frontend JSON endpoint with bounded paging, locale, safe-search and explicit challenge or rate-limit classification. DataDome persistence is deliberately deferred until a tested state transition is implemented.
