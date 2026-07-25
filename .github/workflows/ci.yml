@@ -89,9 +89,27 @@ jobs:
       - name: Validate OpenAPI and manifests
         run: npm run validate:specs
       - name: Workerd integration tests
+        id: workerd-tests
+        shell: bash
         env:
           CLOUDFLARE_CF_FETCH_ENABLED: 'false'
-        run: npm run test:worker
+        run: |
+          set +e
+          npm run test:worker 2>&1 | tee workerd-tests.log
+          status=${PIPESTATUS[0]}
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          exit 0
+      - name: Upload workerd test diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workerd-test-diagnostics
+          path: workerd-tests.log
+          if-no-files-found: error
+          retention-days: 3
+      - name: Enforce workerd test result
+        if: steps.workerd-tests.outputs.status != '0'
+        run: exit 1
       - name: Wrangler dry-run bundle
         run: npm run bundle
       - name: Bundle size report
