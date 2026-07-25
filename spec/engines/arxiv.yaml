@@ -1,0 +1,26 @@
+id: arxiv
+display_name: arXiv
+endpoint: https://export.arxiv.org/api/query
+method: GET
+categories: [academic]
+source_kind: atom
+allowed_hosts: [export.arxiv.org]
+capabilities:
+  paging: true
+  locale: false
+  country: false
+  safe_search: false
+  time_range: false
+limits:
+  timeout_ms: 2500
+  max_body_bytes: 2097152
+  max_steps: 3
+  max_redirects: 2
+versions:
+  parser: arxiv-atom-v1
+cache:
+  response_ttl_seconds: 1800
+  negative_ttl_seconds: 30
+state: stateless
+default_enabled: true
+notes: Uses search_query=all:<query>, start=(page-1)*10 and max_results=10. Preserves paper metadata from Atom and arXiv namespace elements.

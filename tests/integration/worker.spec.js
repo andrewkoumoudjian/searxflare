@@ -1,0 +1,126 @@
+import { exports } from "cloudflare:workers";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+const AUTH = { authorization: "Bearer test-api-key" };
+
+const ARXIV = `<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xmlns:arxiv="http://arxiv.org/schemas/atom">
+  <entry>
+    <id>https://arxiv.org/abs/1234.5678v1</id>
+    <title>Cloudflare Rust</title>
+    <summary>Academic result.</summary>
+    <published>2026-01-02T03:04:05Z</published>
+    <author><name>Ada Example</name></author>
+    <link title="pdf" href="https://arxiv.org/pdf/1234.5678v1" type="application/pdf" />
+    <category term="cs.IR" />
+  </entry>
+</feed>`;
+
+const WIKIPEDIA = `<!doctype html><html><body><ul class="mw-search-results">
+<li class="mw-search-result"><div class="mw-search-result-heading"><a href="/wiki/Cloudflare">Cloudflare</a></div><div class="searchresult">Reference result.</div></li>
+</ul></body></html>`;
+
+const DUCKDUCKGO = `<!doctype html><html><body><div id="links">
+<div class="web-result"><h2><a href="https://duckduckgo.com/l/?uddg=https%3A%2F%2Fexample.com%2Fcloudflare">Example result</a></h2><a class="result__snippet">Web result.</a></div>
+</div></body></html>`;
+
+function mockProviders({ duckFailure = false, delayArxiv = false } = {}) {
+  const mock = vi.fn(async (input, init) => {
+    const request = input instanceof Request ? input : new Request(input, init);
+    const url = new URL(request.url);
+    if (url.hostname === "export.arxiv.org") {
+      if (delayArxiv) {
+        return await new Promise((_, reject) => {
+          request.signal.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")));
+        });
+      }
+      return new Response(ARXIV, { status: 200, headers: { "content-type": "application/atom+xml" } });
+    }
+    if (url.hostname.endsWith("wikipedia.org")) {
+      return new Response(WIKIPEDIA, { status: 200, headers: { "content-type": "text/html; charset=UTF-8" } });
+    }
+    if (url.hostname === "html.duckduckgo.com") {
+      if (duckFailure) {
+        return new Response("<html><form id='challenge-form'>CAPTCHA</form></html>", { status: 403, headers: { "content-type": "text/html" } });
+      }
+      return new Response(DUCKDUCKGO, { status: 200, headers: { "content-type": "text/html" } });
+    }
+    throw new Error(`unexpected outbound request: ${request.url}`);
+  });
+  vi.stubGlobal("fetch", mock);
+  return mock;
+}
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+describe("Worker routes", () => {
+  it("serves unauthenticated health checks", async () => {
+    const response = await exports.default.fetch("https://example.com/healthz");
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ status: "ok" });
+    expect(response.headers.get("x-request-id")).toBeTruthy();
+  });
+
+  it("protects the v1 API", async () => {
+    const response = await exports.default.fetch("https://example.com/v1/engines");
+    expect(response.status).toBe(401);
+    const problem = await response.json();
+    expect(problem.code).toBe("AUTHENTICATION_REQUIRED");
+    expect(response.headers.get("content-type")).toContain("application/problem+json");
+  });
+
+  it("returns the compile-time catalogue", async () => {
+    const response = await exports.default.fetch(new Request("https://example.com/v1/engines", { headers: AUTH }));
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.engines.map((engine) => engine.id)).toEqual(["arxiv", "wikipedia", "duckduckgo-html"]);
+  });
+
+  it("returns UNKNOWN_ENGINE for unsupported IDs", async () => {
+    const response = await exports.default.fetch(new Request("https://example.com/v1/engines/nope", { headers: AUTH }));
+    expect(response.status).toBe(404);
+    expect((await response.json()).code).toBe("UNKNOWN_ENGINE");
+  });
+
+  it("fans out concurrently and returns partial results", async () => {
+    mockProviders({ duckFailure: true });
+    const response = await exports.default.fetch(new Request("https://example.com/v1/search?q=cloudflare+rust", { headers: AUTH }));
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.partial).toBe(true);
+    expect(body.results.length).toBeGreaterThanOrEqual(2);
+    expect(body.engines.some((engine) => engine.failure_kind === "ENGINE_CHALLENGED")).toBe(true);
+    expect(body.results.every((result) => result.canonical_url.startsWith("http"))).toBe(true);
+  });
+
+  it("returns NO_ENGINE_SUCCEEDED when the only engine times out", async () => {
+    mockProviders({ delayArxiv: true });
+    const response = await exports.default.fetch(new Request("https://example.com/v1/search?q=rust&engines=arxiv&timeout_ms=10", { headers: AUTH }));
+    expect(response.status).toBe(502);
+    expect((await response.json()).code).toBe("NO_ENGINE_SUCCEEDED");
+  });
+
+  it("serves the SearXNG JSON compatibility subset", async () => {
+    mockProviders();
+    const response = await exports.default.fetch("https://example.com/search?q=rust&engines=wikipedia&format=json");
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.query).toBe("rust");
+    expect(body.number_of_results).toBe(1);
+    expect(body.results[0].engines).toContain("wikipedia");
+  });
+
+  it("reuses the aggregate Cache API entry", async () => {
+    const mock = mockProviders();
+    const request = () => new Request("https://example.com/v1/search?q=cache-test&engines=wikipedia", { headers: AUTH });
+    const first = await exports.default.fetch(request());
+    expect(first.status).toBe(200);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const second = await exports.default.fetch(request());
+    expect(second.status).toBe(200);
+    expect((await second.json()).cached).toBe(true);
+    expect(mock).toHaveBeenCalledTimes(1);
+  });
+});

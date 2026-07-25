@@ -1,0 +1,16 @@
+[package]
+name = "metasearch-http"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+async-trait.workspace = true
+futures-util.workspace = true
+js-sys.workspace = true
+metasearch-core = { path = "../metasearch-core" }
+url.workspace = true
+wasm-bindgen.workspace = true
+worker.workspace = true

@@ -1,0 +1,17 @@
+[package]
+name = "metasearch-engines"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+async-trait.workspace = true
+futures-util.workspace = true
+metasearch-core = { path = "../metasearch-core" }
+metasearch-parsers = { path = "../metasearch-parsers" }
+serde.workspace = true
+serde_json.workspace = true
+serde_urlencoded.workspace = true
+url.workspace = true

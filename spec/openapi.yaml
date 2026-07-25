@@ -1,0 +1,396 @@
+openapi: 3.0.3
+info:
+  title: Searxflare API
+  version: 0.1.0
+  description: API-only metasearch service running on Cloudflare Workers.
+servers:
+  - url: https://search.example.com
+security:
+  - bearerAuth: []
+paths:
+  /healthz:
+    get:
+      security: []
+      operationId: health
+      responses:
+        '200':
+          description: Worker process is running.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status: { type: string, enum: [ok] }
+  /readyz:
+    get:
+      security: []
+      operationId: readiness
+      responses:
+        '200': { $ref: '#/components/responses/Ready' }
+        '503': { $ref: '#/components/responses/NotReady' }
+  /v1/search:
+    get:
+      operationId: searchGet
+      parameters:
+        - $ref: '#/components/parameters/Query'
+        - $ref: '#/components/parameters/Engines'
+        - $ref: '#/components/parameters/Categories'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Locale'
+        - $ref: '#/components/parameters/Country'
+        - $ref: '#/components/parameters/SafeSearch'
+        - $ref: '#/components/parameters/TimeRange'
+        - $ref: '#/components/parameters/Ranking'
+        - $ref: '#/components/parameters/Timeout'
+      responses:
+        '200': { $ref: '#/components/responses/Search' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+        '429': { $ref: '#/components/responses/Problem' }
+        '502': { $ref: '#/components/responses/Problem' }
+        '504': { $ref: '#/components/responses/Problem' }
+    post:
+      operationId: searchPost
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SearchRequest' }
+      responses:
+        '200': { $ref: '#/components/responses/Search' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+        '429': { $ref: '#/components/responses/Problem' }
+        '502': { $ref: '#/components/responses/Problem' }
+        '504': { $ref: '#/components/responses/Problem' }
+  /v1/engines:
+    get:
+      operationId: listEngines
+      responses:
+        '200':
+          description: Compile-time engine catalogue.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [registry_version, engines]
+                properties:
+                  registry_version: { type: string }
+                  engines:
+                    type: array
+                    items: { $ref: '#/components/schemas/EngineDescriptor' }
+        '401': { $ref: '#/components/responses/Problem' }
+  /v1/engines/{engine_id}:
+    parameters:
+      - $ref: '#/components/parameters/EngineId'
+    get:
+      operationId: getEngine
+      responses:
+        '200':
+          description: Engine descriptor.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EngineDescriptor' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+  /v1/engines/{engine_id}/search:
+    parameters:
+      - $ref: '#/components/parameters/EngineId'
+    get:
+      operationId: debugEngineSearch
+      parameters:
+        - $ref: '#/components/parameters/Query'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Locale'
+        - $ref: '#/components/parameters/SafeSearch'
+        - $ref: '#/components/parameters/TimeRange'
+        - $ref: '#/components/parameters/Timeout'
+      responses:
+        '200': { $ref: '#/components/responses/Search' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '502': { $ref: '#/components/responses/Problem' }
+  /search:
+    get:
+      security: []
+      operationId: searxCompatibilitySearch
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 499 }
+        - name: engines
+          in: query
+          schema: { type: string }
+        - name: categories
+          in: query
+          schema: { type: string }
+        - name: language
+          in: query
+          schema: { type: string }
+        - name: pageno
+          in: query
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: safesearch
+          in: query
+          schema: { type: integer, enum: [0, 1, 2], default: 1 }
+        - name: time_range
+          in: query
+          schema: { $ref: '#/components/schemas/TimeRange' }
+        - name: format
+          in: query
+          required: true
+          schema: { type: string, enum: [json] }
+      responses:
+        '200':
+          description: SearXNG-compatible JSON subset.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SearxCompatResponse' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '502': { $ref: '#/components/responses/Problem' }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+  parameters:
+    Query:
+      name: q
+      in: query
+      required: true
+      schema: { type: string, minLength: 1, maxLength: 499 }
+    Engines:
+      name: engines
+      in: query
+      schema: { type: string, description: Comma-separated engine IDs; maximum five. }
+    Categories:
+      name: categories
+      in: query
+      schema: { type: string, description: Comma-separated categories; maximum three. }
+    Page:
+      name: page
+      in: query
+      schema: { type: integer, minimum: 1, default: 1 }
+    Cursor:
+      name: cursor
+      in: query
+      schema: { type: string, minLength: 1, maxLength: 4096 }
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 20, default: 10 }
+    Locale:
+      name: locale
+      in: query
+      schema: { type: string, maxLength: 35 }
+    Country:
+      name: country
+      in: query
+      schema: { type: string, minLength: 2, maxLength: 2 }
+    SafeSearch:
+      name: safe_search
+      in: query
+      schema: { $ref: '#/components/schemas/SafeSearch' }
+    TimeRange:
+      name: time_range
+      in: query
+      schema: { $ref: '#/components/schemas/TimeRange' }
+    Ranking:
+      name: ranking
+      in: query
+      schema: { $ref: '#/components/schemas/Ranking' }
+    Timeout:
+      name: timeout_ms
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 8000, default: 5000 }
+    EngineId:
+      name: engine_id
+      in: path
+      required: true
+      schema: { type: string, pattern: '^[a-z0-9-]+$' }
+  responses:
+    Ready:
+      description: Required configuration is available.
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [status, registry_version]
+            properties:
+              status: { type: string, enum: [ready] }
+              registry_version: { type: string }
+    NotReady:
+      description: Required configuration is missing.
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [status, reason]
+            properties:
+              status: { type: string, enum: [not_ready] }
+              reason: { type: string }
+    Search:
+      description: Aggregated metasearch response.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/SearchResponse' }
+    Problem:
+      description: RFC 9457-style problem response.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+  schemas:
+    SafeSearch:
+      type: string
+      enum: [off, moderate, strict]
+      default: moderate
+    TimeRange:
+      type: string
+      enum: [day, week, month, year]
+    Ranking:
+      type: string
+      enum: [rrf-v1, searx-compat-v1]
+      default: rrf-v1
+    SearchRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        query: { type: string, minLength: 1, maxLength: 499 }
+        q: { type: string, minLength: 1, maxLength: 499 }
+        engines:
+          type: array
+          maxItems: 5
+          uniqueItems: true
+          items: { type: string, pattern: '^[a-z0-9-]+$' }
+        categories:
+          type: array
+          maxItems: 3
+          uniqueItems: true
+          items: { type: string }
+        page: { type: integer, minimum: 1, default: 1 }
+        cursor: { type: string, minLength: 1, maxLength: 4096 }
+        limit: { type: integer, minimum: 1, maximum: 20, default: 10 }
+        locale: { type: string, maxLength: 35 }
+        country: { type: string, minLength: 2, maxLength: 2 }
+        safe_search: { $ref: '#/components/schemas/SafeSearch' }
+        time_range: { $ref: '#/components/schemas/TimeRange' }
+        ranking: { $ref: '#/components/schemas/Ranking' }
+        timeout_ms: { type: integer, minimum: 1, maximum: 8000, default: 5000 }
+      oneOf:
+        - required: [query]
+          not: { required: [q] }
+        - required: [q]
+          not: { required: [query] }
+      not: { required: [page, cursor] }
+    SearchResponse:
+      type: object
+      required: [request_id, query, ranking, partial, cached, result_count, results, engines]
+      properties:
+        request_id: { type: string, format: uuid }
+        query: { type: string }
+        ranking: { $ref: '#/components/schemas/Ranking' }
+        partial: { type: boolean }
+        cached: { type: boolean }
+        result_count: { type: integer, minimum: 0, maximum: 20 }
+        results:
+          type: array
+          items: { $ref: '#/components/schemas/Result' }
+        engines:
+          type: array
+          items: { $ref: '#/components/schemas/EngineReport' }
+    Result:
+      type: object
+      required: [url, canonical_url, title, content, category, metadata, engines, positions, score]
+      properties:
+        url: { type: string, format: uri }
+        canonical_url: { type: string, format: uri }
+        title: { type: string }
+        content: { type: string }
+        published_at: { type: string, format: date-time, nullable: true }
+        thumbnail: { type: string, format: uri, nullable: true }
+        category: { type: string }
+        metadata: { type: object, additionalProperties: true }
+        engines:
+          type: array
+          items: { type: string }
+        positions:
+          type: object
+          additionalProperties: { type: integer, minimum: 1 }
+        score: { type: number, format: double }
+    EngineReport:
+      type: object
+      required: [engine_id, duration_ms, cache_status, result_count]
+      properties:
+        engine_id: { type: string }
+        duration_ms: { type: integer, minimum: 0 }
+        cache_status: { type: string, enum: [hit, miss, bypass, negative_hit] }
+        result_count: { type: integer, minimum: 0 }
+        failure_kind: { type: string, nullable: true }
+        parser_version: { type: string, nullable: true }
+    EngineDescriptor:
+      type: object
+      required: [id, display_name, categories, source_kind, maturity, allowed_hosts, capabilities, timeout_ms, max_body_bytes, max_steps, max_redirects, weight, parser_version, default_enabled, allow_http, state_policy, cache_policy, bot_auth_policy]
+      additionalProperties: true
+      properties:
+        id: { type: string }
+        display_name: { type: string }
+        categories: { type: array, items: { type: string } }
+        source_kind: { type: string, enum: [atom, json, html] }
+        maturity: { type: string, enum: [experimental, beta, stable] }
+        allowed_hosts: { type: array, minItems: 1, items: { type: string } }
+        timeout_ms: { type: integer, minimum: 1, maximum: 8000 }
+        max_body_bytes: { type: integer, minimum: 1, maximum: 2097152 }
+        max_steps: { type: integer, minimum: 1, maximum: 3 }
+        max_redirects: { type: integer, minimum: 0, maximum: 2 }
+        weight: { type: number, minimum: 0 }
+        parser_version: { type: string }
+        default_enabled: { type: boolean }
+        allow_http: { type: boolean }
+    Problem:
+      type: object
+      required: [type, title, status, detail, instance, code, request_id]
+      properties:
+        type: { type: string, format: uri }
+        title: { type: string }
+        status: { type: integer, minimum: 400, maximum: 599 }
+        detail: { type: string }
+        instance: { type: string }
+        code:
+          type: string
+          enum: [INVALID_REQUEST, AUTHENTICATION_REQUIRED, RATE_LIMITED, UNKNOWN_ENGINE, ENGINE_DISABLED, UNSUPPORTED_CAPABILITY, ENGINE_TIMEOUT, ENGINE_RATE_LIMITED, ENGINE_CHALLENGED, ENGINE_ACCESS_DENIED, ENGINE_RESPONSE_TOO_LARGE, ENGINE_INVALID_CONTENT_TYPE, ENGINE_PARSE_FAILED, NO_ENGINE_SUCCEEDED, INVALID_CURSOR, INTERNAL_ERROR]
+        request_id: { type: string }
+        errors:
+          type: array
+          items:
+            type: object
+            required: [field, message]
+            properties:
+              field: { type: string }
+              message: { type: string }
+    SearxCompatResponse:
+      type: object
+      required: [query, number_of_results, results]
+      properties:
+        query: { type: string }
+        number_of_results: { type: integer, minimum: 0 }
+        results: { type: array, items: { $ref: '#/components/schemas/Result' } }
+        answers: { type: array, items: { type: string } }
+        corrections: { type: array, items: { type: string } }
+        suggestions: { type: array, items: { type: string } }
+        unresponsive_engines:
+          type: array
+          items:
+            type: array
+            minItems: 2
+            maxItems: 2
+            items: { type: string }
