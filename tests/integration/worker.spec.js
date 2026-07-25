@@ -29,6 +29,33 @@ const DUCKDUCKGO = `<!doctype html><html><body><div id="links">
 <div class="web-result"><h2><a href="https://duckduckgo.com/l/?uddg=https%3A%2F%2Fexample.com%2Fcloudflare">Example result</a></h2><a class="result__snippet">Web result.</a></div>
 </div></body></html>`;
 
+const BRAVE = `<!doctype html><html><body>
+<div class="snippet"><a href="https://example.com/brave"><div class="title">Brave result</div></a><div class="content">Brave web result.</div></div>
+</body></html>`;
+
+const QWANT = JSON.stringify({
+  status: "success",
+  data: {
+    result: {
+      items: {
+        mainline: [
+          {
+            type: "web",
+            items: [
+              {
+                title: "Qwant result",
+                url: "https://example.com/qwant",
+                desc: "Qwant web result.",
+                source: "example.com"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+});
+
 function mockProviders({ duckFailure = false, delayArxiv = false, emptyWikipedia = false } = {}) {
   const mock = vi.fn(async (input, init) => {
     const request = input instanceof Request ? input : new Request(input, init);
@@ -52,6 +79,12 @@ function mockProviders({ duckFailure = false, delayArxiv = false, emptyWikipedia
         return new Response("<html><form id='challenge-form'>CAPTCHA</form></html>", { status: 403, headers: { "content-type": "text/html" } });
       }
       return new Response(DUCKDUCKGO, { status: 200, headers: { "content-type": "text/html" } });
+    }
+    if (url.hostname === "search.brave.com") {
+      return new Response(BRAVE, { status: 200, headers: { "content-type": "text/html; charset=UTF-8" } });
+    }
+    if (url.hostname === "api.qwant.com") {
+      return new Response(QWANT, { status: 200, headers: { "content-type": "application/json" } });
     }
     throw new Error(`unexpected outbound request: ${request.url}`);
   });
@@ -83,7 +116,13 @@ describe("Worker routes", () => {
     const response = await exports.default.fetch(new Request("https://example.com/v1/engines", { headers: AUTH }));
     expect(response.status).toBe(200);
     const body = await response.json();
-    expect(body.engines.map((engine) => engine.id)).toEqual(["arxiv", "wikipedia", "duckduckgo-html"]);
+    expect(body.engines.map((engine) => engine.id)).toEqual([
+      "arxiv",
+      "wikipedia",
+      "duckduckgo-html",
+      "brave-web",
+      "qwant-web"
+    ]);
   });
 
   it("returns UNKNOWN_ENGINE for unsupported IDs", async () => {
@@ -98,9 +137,25 @@ describe("Worker routes", () => {
     expect(response.status).toBe(200);
     const body = await response.json();
     expect(body.partial).toBe(true);
-    expect(body.results.length).toBeGreaterThanOrEqual(2);
+    expect(body.results.length).toBeGreaterThanOrEqual(4);
     expect(body.engines.some((engine) => engine.failure_kind === "ENGINE_CHALLENGED")).toBe(true);
     expect(body.results.every((result) => result.canonical_url.startsWith("http"))).toBe(true);
+  });
+
+  it("aggregates the independent general web providers", async () => {
+    mockProviders();
+    const response = await exports.default.fetch(new Request(
+      "https://example.com/v1/search?q=cloudflare&engines=duckduckgo-html,brave-web,qwant-web",
+      { headers: AUTH }
+    ));
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.partial).toBe(false);
+    expect(body.results.flatMap((result) => result.engines)).toEqual(expect.arrayContaining([
+      "duckduckgo-html",
+      "brave-web",
+      "qwant-web"
+    ]));
   });
 
   it("keeps an empty successful engine as a partial response", async () => {
