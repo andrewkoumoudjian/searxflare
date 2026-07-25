@@ -67,7 +67,25 @@ jobs:
       - name: Rust tests
         run: cargo test --workspace
       - name: Wasm build
-        run: cargo build --workspace --target wasm32-unknown-unknown
+        id: wasm-build
+        shell: bash
+        run: |
+          set +e
+          cargo build --workspace --target wasm32-unknown-unknown 2>&1 | tee wasm-build.log
+          status=${PIPESTATUS[0]}
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          exit 0
+      - name: Upload Wasm build diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wasm-build-diagnostics
+          path: wasm-build.log
+          if-no-files-found: error
+          retention-days: 3
+      - name: Enforce Wasm build result
+        if: steps.wasm-build.outputs.status != '0'
+        run: exit 1
       - name: Validate OpenAPI and manifests
         run: npm run validate:specs
       - name: Workerd integration tests
