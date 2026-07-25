@@ -22,5 +22,5 @@ cache:
   response_ttl_seconds: 180
   negative_ttl_seconds: 30
 state: stateless
-default_enabled: true
-notes: Clean-room Rust implementation informed by SearXNG searx/engines/qwant.py at 0909dbc9efb2c6e93e2ad51e60e66417ab291710. Uses the fixed public frontend JSON endpoint with bounded paging, locale, safe-search and explicit challenge or rate-limit classification. DataDome persistence is deliberately deferred until a tested state transition is implemented.
+default_enabled: false
+notes: Clean-room Rust implementation informed by SearXNG searx/engines/qwant.py at 0909dbc9efb2c6e93e2ad51e60e66417ab291710. Uses the fixed public frontend JSON endpoint with bounded paging, locale, safe-search and explicit challenge or rate-limit classification. Cloudflare preview egress was challenged on 2026-07-25, so the provider remains explicit opt-in until a non-bypass, tested state path is available.
