@@ -1,0 +1,32 @@
+{
+  "status": "success",
+  "data": {
+    "result": {
+      "items": {
+        "mainline": [
+          {
+            "type": "web",
+            "items": [
+              {
+                "title": "Qwant result",
+                "url": "https://example.com/qwant-result",
+                "desc": "Independent Qwant web result.",
+                "source": "example.com"
+              }
+            ]
+          },
+          {
+            "type": "ads",
+            "items": [
+              {
+                "title": "Advertisement",
+                "url": "https://ads.example/",
+                "desc": "Ignored."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}
