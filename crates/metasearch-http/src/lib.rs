@@ -192,7 +192,8 @@ mod wasm {
 
         let controller = AbortController::default();
         let signal = controller.signal();
-        let fetch = Fetch::Request(request).send_with_signal(&signal);
+        let fetch_request = Fetch::Request(request);
+        let fetch = fetch_request.send_with_signal(&signal);
         let delay = Delay::from(Duration::from_millis(remaining_ms));
         pin_mut!(fetch);
         pin_mut!(delay);
