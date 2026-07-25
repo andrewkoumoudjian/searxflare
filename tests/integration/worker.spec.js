@@ -20,6 +20,11 @@ const WIKIPEDIA = `<!doctype html><html><body><ul class="mw-search-results">
 <li class="mw-search-result"><div class="mw-search-result-heading"><a href="/wiki/Cloudflare">Cloudflare</a></div><div class="searchresult">Reference result.</div></li>
 </ul></body></html>`;
 
+const EMPTY_WIKIPEDIA = `<!doctype html><html><body>
+<div class="mw-search-nonefound">There were no results matching the query.</div>
+<ul class="mw-search-results"></ul>
+</body></html>`;
+
 const DUCKDUCKGO = `<!doctype html><html><body><div id="links">
 <div class="web-result"><h2><a href="https://duckduckgo.com/l/?uddg=https%3A%2F%2Fexample.com%2Fcloudflare">Example result</a></h2><a class="result__snippet">Web result.</a></div>
 </div></body></html>`;
@@ -37,8 +42,10 @@ function mockProviders({ duckFailure = false, delayArxiv = false, emptyWikipedia
       return new Response(ARXIV, { status: 200, headers: { "content-type": "application/atom+xml" } });
     }
     if (url.hostname.endsWith("wikipedia.org")) {
-      const body = emptyWikipedia ? "<!doctype html><html><body><ul class=\"mw-search-results\"></ul></body></html>" : WIKIPEDIA;
-      return new Response(body, { status: 200, headers: { "content-type": "text/html; charset=UTF-8" } });
+      return new Response(emptyWikipedia ? EMPTY_WIKIPEDIA : WIKIPEDIA, {
+        status: 200,
+        headers: { "content-type": "text/html; charset=UTF-8" }
+      });
     }
     if (url.hostname === "html.duckduckgo.com") {
       if (duckFailure) {
@@ -129,7 +136,12 @@ describe("Worker routes", () => {
     const request = () => new Request("https://example.com/v1/search?q=cache-test&engines=wikipedia", { headers: AUTH });
     const first = await exports.default.fetch(request());
     expect(first.status).toBe(200);
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect((await first.json()).cached).toBe(false);
+
+    // The production path intentionally persists cache entries through ctx.waitUntil().
+    // Consume the response and give the background write time to settle before the next request.
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
     const second = await exports.default.fetch(request());
     expect(second.status).toBe(200);
     expect((await second.json()).cached).toBe(true);
