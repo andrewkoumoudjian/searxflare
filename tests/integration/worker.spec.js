@@ -137,8 +137,9 @@ describe("Worker routes", () => {
     expect(response.status).toBe(200);
     const body = await response.json();
     expect(body.partial).toBe(true);
-    expect(body.results.length).toBeGreaterThanOrEqual(4);
+    expect(body.results.length).toBeGreaterThanOrEqual(3);
     expect(body.engines.some((engine) => engine.failure_kind === "ENGINE_CHALLENGED")).toBe(true);
+    expect(body.engines.map((engine) => engine.engine_id)).not.toContain("qwant-web");
     expect(body.results.every((result) => result.canonical_url.startsWith("http"))).toBe(true);
   });
 
