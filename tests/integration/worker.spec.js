@@ -1,6 +1,7 @@
-import { exports } from "cloudflare:workers";
+import { env, exports } from "cloudflare:workers";
 import { createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import worker from "../../crates/metasearch-worker/build/worker/shim.mjs";
 
 const AUTH = { authorization: "Bearer test-api-key" };
 
@@ -191,16 +192,18 @@ describe("Worker routes", () => {
   it("reuses the aggregate Cache API entry", async () => {
     const mock = mockProviders();
     const request = () => new Request("https://example.com/v1/search?q=cache-test&engines=wikipedia", { headers: AUTH });
-    const ctx = createExecutionContext();
-    const first = await ctx.exports.default.fetch(request());
+    const firstCtx = createExecutionContext();
+    const first = await worker.fetch(request(), env, firstCtx);
     expect(first.status).toBe(200);
     expect((await first.json()).cached).toBe(false);
 
-    await waitOnExecutionContext(ctx);
+    await waitOnExecutionContext(firstCtx);
 
-    const second = await exports.default.fetch(request());
+    const secondCtx = createExecutionContext();
+    const second = await worker.fetch(request(), env, secondCtx);
     expect(second.status).toBe(200);
     expect((await second.json()).cached).toBe(true);
     expect(mock).toHaveBeenCalledTimes(1);
+    await waitOnExecutionContext(secondCtx);
   });
 });
