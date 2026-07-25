@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# One-use verification harness; removed after main is green.
 set -u
 
 log=main-diagnostics.log
