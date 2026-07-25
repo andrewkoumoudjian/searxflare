@@ -1,0 +1,26 @@
+id: qwant-web
+display_name: Qwant Web
+endpoint: https://api.qwant.com/v3/search/web
+method: GET
+categories: [general]
+source_kind: json
+allowed_hosts: [api.qwant.com, www.qwant.com]
+capabilities:
+  paging: true
+  locale: true
+  country: true
+  safe_search: true
+  time_range: false
+limits:
+  timeout_ms: 2500
+  max_body_bytes: 2097152
+  max_steps: 3
+  max_redirects: 2
+versions:
+  parser: qwant-web-json-v1
+cache:
+  response_ttl_seconds: 180
+  negative_ttl_seconds: 30
+state: kv_snapshot
+default_enabled: true
+notes: Clean-room Rust implementation informed by SearXNG searx/engines/qwant.py at 0909dbc9efb2c6e93e2ad51e60e66417ab291710. Uses the fixed public frontend JSON endpoint with bounded paging, locale, safe-search and explicit challenge or rate-limit classification. A future KV adapter may persist non-critical DataDome snapshots; the engine remains safe without one.
