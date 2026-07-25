@@ -1,0 +1,39 @@
+Searxflare
+Copyright (c) 2026 Andrew Koumoudjian
+
+This project contains original Rust implementations informed by publicly available upstream projects. No upstream source file has been copied verbatim.
+
+SearXNG
+- Repository: https://github.com/searxng/searxng
+- Reviewed commit: 4f64d9501385ce654e3c078eb42ebc8beaa64467
+- Relevant paths: searx/engines/arxiv.py, searx/engines/wikipedia.py, searx/engines/duckduckgo.py, searx/search/processors/online.py, searx/results.py, searx/enginelib
+- Licence: AGPL-3.0-or-later
+- Use: behavioural and interoperability reference only. Original Rust code was written for this repository.
+
+Websurfx
+- Repository: https://github.com/neon-mmd/websurfx
+- Reviewed commit: 09582bea0c6cebbf6be3b07df0caa6cf387b2ebb
+- Relevant paths: src/engines and parser abstractions
+- Use: Rust architecture, typed parsing and fixture-test design reference.
+
+Cloudflare workers-rs
+- Repository: https://github.com/cloudflare/workers-rs
+- Reviewed release commit: cc174db40ba9f648623805e98053a4eba3bb50c0 (v0.8.5)
+- Licence: Apache-2.0
+- Use: Worker runtime APIs and examples.
+
+Cloudflare lol-html
+- Repository: https://github.com/cloudflare/lol-html
+- Reviewed commit: 02f139c4437b2da666a50d32e11d9158cbe0a393
+- Licence: BSD-3-Clause
+- Use: dependency and selector-driven streaming parser API.
+
+ArcArcGo
+- Repository: https://github.com/0xarchit/ArcArcGo
+- Reviewed branch: main; worker.js blob fe41a1caa28b25b282ac21f641aa1bf55f5e4f45
+- Use: additional observation that manual redirects and browser-compatible headers are useful for DuckDuckGo through Workers. The unrestricted reverse proxy and response rewriting were not adopted.
+
+Yrobot/cloudflare-search
+- Repository: https://github.com/Yrobot/cloudflare-search
+- Reviewed branch: master; utils/searchBing.js blob b94573b065745011265191a72b5d25d28a19875b
+- Use: future Bing-adapter research only. Bing is not implemented in this cycle.

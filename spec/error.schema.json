@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://searxflare.dev/schemas/error.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["type", "title", "status", "detail", "instance", "code", "request_id"],
+  "properties": {
+    "type": { "type": "string", "format": "uri" },
+    "title": { "type": "string" },
+    "status": { "type": "integer", "minimum": 400, "maximum": 599 },
+    "detail": { "type": "string" },
+    "instance": { "type": "string" },
+    "code": {
+      "enum": ["INVALID_REQUEST", "AUTHENTICATION_REQUIRED", "RATE_LIMITED", "UNKNOWN_ENGINE", "ENGINE_DISABLED", "UNSUPPORTED_CAPABILITY", "ENGINE_TIMEOUT", "ENGINE_RATE_LIMITED", "ENGINE_CHALLENGED", "ENGINE_ACCESS_DENIED", "ENGINE_RESPONSE_TOO_LARGE", "ENGINE_INVALID_CONTENT_TYPE", "ENGINE_PARSE_FAILED", "NO_ENGINE_SUCCEEDED", "INVALID_CURSOR", "INTERNAL_ERROR"]
+    },
+    "request_id": { "type": "string" },
+    "errors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["field", "message"],
+        "properties": { "field": { "type": "string" }, "message": { "type": "string" } }
+      }
+    }
+  }
+}

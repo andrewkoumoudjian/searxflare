@@ -1,0 +1,26 @@
+id: duckduckgo-html
+display_name: DuckDuckGo HTML
+endpoint: https://html.duckduckgo.com/html/
+method: POST
+categories: [general]
+source_kind: html
+allowed_hosts: [html.duckduckgo.com, duckduckgo.com]
+capabilities:
+  paging: false
+  locale: true
+  country: false
+  safe_search: true
+  time_range: true
+limits:
+  timeout_ms: 3500
+  max_body_bytes: 2097152
+  max_steps: 3
+  max_redirects: 2
+versions:
+  parser: duckduckgo-html-v1
+cache:
+  response_ttl_seconds: 180
+  negative_ttl_seconds: 30
+state: stateless
+default_enabled: true
+notes: First-page no-JavaScript HTML form only. Uses q, b, kl, kp and optional df; continuation requiring VQD is intentionally unsupported. Redirect-wrapper decoding is internal and limited to DuckDuckGo /l URLs.

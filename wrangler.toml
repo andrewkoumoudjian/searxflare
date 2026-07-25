@@ -1,0 +1,20 @@
+name = "searxflare"
+main = "crates/metasearch-worker/build/worker/shim.mjs"
+compatibility_date = "2026-07-24"
+workers_dev = true
+
+[build]
+command = "cd crates/metasearch-worker && worker-build --release"
+
+[observability]
+enabled = true
+
+# Optional production bindings. The Worker continues without them in local development.
+# [[analytics_engine_datasets]]
+# binding = "SEARCH_ANALYTICS"
+# dataset = "searxflare_search"
+#
+# [[kv_namespaces]]
+# binding = "ENGINE_STATE"
+# id = "replace-with-production-kv-id"
+# preview_id = "replace-with-preview-kv-id"
