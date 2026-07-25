@@ -41,4 +41,3 @@ codegen-units = 1
 lto = true
 opt-level = "s"
 panic = "abort"
-strip = "symbols"
