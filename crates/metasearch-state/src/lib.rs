@@ -1,6 +1,6 @@
-use metasearch_core::{EngineFailure, EngineState};
 #[cfg(target_arch = "wasm32")]
 use metasearch_core::FailureKind;
+use metasearch_core::{EngineFailure, EngineState};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Default, Clone, Copy)]
