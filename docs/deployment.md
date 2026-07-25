@@ -9,7 +9,23 @@ npx wrangler secret put API_KEY_SHA256
 
 Paste only the lowercase hash, not the raw key. Configure optional Analytics Engine and KV bindings in `wrangler.toml` after creating the resources.
 
-## Validate and deploy
+## Cloudflare Workers Builds
+
+The repository is self-contained for Cloudflare's Git integration. `scripts/build_worker.sh` reads the pinned toolchain from `rust-toolchain.toml`, installs Rust through the official rustup installer when the build image does not provide it, adds `wasm32-unknown-unknown`, installs the pinned `worker-build` release when absent, and builds `metasearch-worker`.
+
+Use these Worker build settings from the repository root:
+
+```text
+Production branch: main
+Build command:     leave empty
+Deploy command:    npx wrangler deploy
+```
+
+Leaving the separate build command empty avoids compiling twice. Wrangler invokes the `[build]` command in `wrangler.toml` during deployment. If the Cloudflare project already has `npm run build` configured, that command is also supported through the root `package.json`, but the later deploy step will invoke the build again.
+
+The Worker name in Cloudflare must be `searxflare`, matching `wrangler.toml`. Enable non-production branch builds only when preview deployments are desired.
+
+## Validate and deploy manually
 
 ```bash
 npm run bundle
