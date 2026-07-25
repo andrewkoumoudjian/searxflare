@@ -195,8 +195,8 @@ describe("Worker routes", () => {
     expect((await first.json()).cached).toBe(false);
 
     // The production path intentionally persists cache entries through ctx.waitUntil().
-    // Consume the response and give the background write time to settle before the next request.
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    // Leave a bounded settling window for the asynchronous Cache API write under loaded CI.
+    await new Promise((resolve) => setTimeout(resolve, 500));
 
     const second = await exports.default.fetch(request());
     expect(second.status).toBe(200);
