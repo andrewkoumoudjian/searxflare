@@ -32,7 +32,7 @@ pub static DESCRIPTOR: EngineDescriptor = EngineDescriptor {
     parser_version: "qwant-web-json-v1",
     default_enabled: true,
     allow_http: false,
-    state_policy: StatePolicy::KvSnapshot,
+    state_policy: StatePolicy::Stateless,
     cache_policy: CachePolicy {
         response_ttl_seconds: 180,
         negative_ttl_seconds: 30,
@@ -303,7 +303,10 @@ mod tests {
         assert_eq!(parameters.get("locale").map(String::as_str), Some("fr_CA"));
         assert_eq!(parameters.get("offset").map(String::as_str), Some("10"));
         assert_eq!(parameters.get("safesearch").map(String::as_str), Some("1"));
-        assert_eq!(request.headers.get("origin").map(String::as_str), Some("https://www.qwant.com"));
+        assert_eq!(
+            request.headers.get("origin").map(String::as_str),
+            Some("https://www.qwant.com")
+        );
     }
 
     #[test]
