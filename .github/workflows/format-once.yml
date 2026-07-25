@@ -1,0 +1,32 @@
+name: Format Rust Once
+
+on:
+  push:
+    branches: [feat/worker-foundation]
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: feat/worker-foundation
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: 1.97.1
+          components: rustfmt
+      - run: cargo fmt --all
+      - name: Commit rustfmt output
+        run: |
+          if git diff --quiet; then
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- '*.rs'
+          git commit -m 'style: format Rust workspace'
+          git push origin HEAD:feat/worker-foundation
