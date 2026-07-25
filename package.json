@@ -3,7 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build:worker": "cd crates/metasearch-worker && worker-build --release",
+    "build": "bash scripts/build_worker.sh",
+    "build:worker": "bash scripts/build_worker.sh",
     "dev": "npm run build:worker && wrangler dev",
     "test": "npm run test:worker",
     "test:worker": "npm run build:worker && vitest run",
