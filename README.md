@@ -21,7 +21,7 @@ The canonical system design is [`architecture.md`](architecture.md). Public cont
 
 ## Prerequisites
 
-- Rust 1.85.1 with `wasm32-unknown-unknown`
+- Rust 1.97.1 with `wasm32-unknown-unknown`
 - Node.js 22 or newer
 - `worker-build` 0.8.5
 - Wrangler 4
