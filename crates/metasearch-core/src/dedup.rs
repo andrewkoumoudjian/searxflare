@@ -95,7 +95,8 @@ mod tests {
     fn merges_exact_canonical_matches_and_preserves_provenance() {
         let results = vec![
             normalize_provider_result(provider("a", "Short", "one", 2)).unwrap(),
-            normalize_provider_result(provider("b", "A stronger title", "longer content", 1)).unwrap(),
+            normalize_provider_result(provider("b", "A stronger title", "longer content", 1))
+                .unwrap(),
         ];
         let merged = deduplicate(results);
         assert_eq!(merged.len(), 1);

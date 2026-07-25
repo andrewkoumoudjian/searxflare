@@ -45,20 +45,32 @@ impl<'a> CursorSigner<'a> {
 
     pub fn encode(&self, payload: &CursorPayload) -> Result<String, CursorError> {
         let bytes = serde_json::to_vec(payload).map_err(|_| CursorError::InvalidPayload)?;
-        let mut mac = Hmac::<Sha256>::new_from_slice(self.key).map_err(|_| CursorError::InvalidPayload)?;
+        let mut mac =
+            Hmac::<Sha256>::new_from_slice(self.key).map_err(|_| CursorError::InvalidPayload)?;
         mac.update(&bytes);
         let signature = mac.finalize().into_bytes();
-        Ok(format!("{}.{}", URL_SAFE_NO_PAD.encode(bytes), URL_SAFE_NO_PAD.encode(signature)))
+        Ok(format!(
+            "{}.{}",
+            URL_SAFE_NO_PAD.encode(bytes),
+            URL_SAFE_NO_PAD.encode(signature)
+        ))
     }
 
     pub fn decode(&self, cursor: &str, now_ms: u64) -> Result<CursorPayload, CursorError> {
         let (payload, signature) = cursor.split_once('.').ok_or(CursorError::InvalidEncoding)?;
-        let bytes = URL_SAFE_NO_PAD.decode(payload).map_err(|_| CursorError::InvalidEncoding)?;
-        let signature = URL_SAFE_NO_PAD.decode(signature).map_err(|_| CursorError::InvalidEncoding)?;
-        let mut mac = Hmac::<Sha256>::new_from_slice(self.key).map_err(|_| CursorError::InvalidPayload)?;
+        let bytes = URL_SAFE_NO_PAD
+            .decode(payload)
+            .map_err(|_| CursorError::InvalidEncoding)?;
+        let signature = URL_SAFE_NO_PAD
+            .decode(signature)
+            .map_err(|_| CursorError::InvalidEncoding)?;
+        let mut mac =
+            Hmac::<Sha256>::new_from_slice(self.key).map_err(|_| CursorError::InvalidPayload)?;
         mac.update(&bytes);
-        mac.verify_slice(&signature).map_err(|_| CursorError::InvalidSignature)?;
-        let payload: CursorPayload = serde_json::from_slice(&bytes).map_err(|_| CursorError::InvalidPayload)?;
+        mac.verify_slice(&signature)
+            .map_err(|_| CursorError::InvalidSignature)?;
+        let payload: CursorPayload =
+            serde_json::from_slice(&bytes).map_err(|_| CursorError::InvalidPayload)?;
         if payload.expires_at_ms <= now_ms {
             return Err(CursorError::Expired);
         }
@@ -73,7 +85,11 @@ mod tests {
     #[test]
     fn signs_and_validates_cursor() {
         let signer = CursorSigner::new(b"test signing key");
-        let payload = CursorPayload { page: 2, engine_cursors: BTreeMap::new(), expires_at_ms: 2_000 };
+        let payload = CursorPayload {
+            page: 2,
+            engine_cursors: BTreeMap::new(),
+            expires_at_ms: 2_000,
+        };
         let encoded = signer.encode(&payload).unwrap();
         assert_eq!(signer.decode(&encoded, 1_000).unwrap(), payload);
     }
@@ -81,9 +97,16 @@ mod tests {
     #[test]
     fn rejects_tampering() {
         let signer = CursorSigner::new(b"test signing key");
-        let payload = CursorPayload { page: 2, engine_cursors: BTreeMap::new(), expires_at_ms: 2_000 };
+        let payload = CursorPayload {
+            page: 2,
+            engine_cursors: BTreeMap::new(),
+            expires_at_ms: 2_000,
+        };
         let mut encoded = signer.encode(&payload).unwrap();
         encoded.push('x');
-        assert!(matches!(signer.decode(&encoded, 1_000), Err(CursorError::InvalidSignature | CursorError::InvalidEncoding)));
+        assert!(matches!(
+            signer.decode(&encoded, 1_000),
+            Err(CursorError::InvalidSignature | CursorError::InvalidEncoding)
+        ));
     }
 }

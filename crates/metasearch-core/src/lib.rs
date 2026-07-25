@@ -8,7 +8,9 @@ mod query;
 mod ranking;
 mod traits;
 
-pub use cache::{build_cache_key, CacheKeyInput, API_VERSION, ENGINE_REGISTRY_VERSION, RANKING_VERSION};
+pub use cache::{
+    build_cache_key, CacheKeyInput, API_VERSION, ENGINE_REGISTRY_VERSION, RANKING_VERSION,
+};
 pub use canonicalize::{canonicalize_url, CanonicalizationError};
 pub use cursor::{CursorError, CursorPayload, CursorSigner};
 pub use dedup::{deduplicate, normalize_provider_result};

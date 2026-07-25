@@ -1,5 +1,9 @@
-use crate::{arxiv::ArxivEngine, duckduckgo_html::DuckDuckGoHtmlEngine, wikipedia::WikipediaEngine};
-use metasearch_core::{EngineContext, EngineDescriptor, EngineFailure, EngineOutput, NormalizedQuery, SearchEngine};
+use crate::{
+    arxiv::ArxivEngine, duckduckgo_html::DuckDuckGoHtmlEngine, wikipedia::WikipediaEngine,
+};
+use metasearch_core::{
+    EngineContext, EngineDescriptor, EngineFailure, EngineOutput, NormalizedQuery, SearchEngine,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RegisteredEngine {
@@ -42,7 +46,9 @@ pub fn registry() -> &'static [RegisteredEngine] {
 }
 
 pub fn find_engine(engine_id: &str) -> Option<&'static RegisteredEngine> {
-    REGISTRY.iter().find(|engine| engine.descriptor().id == engine_id)
+    REGISTRY
+        .iter()
+        .find(|engine| engine.descriptor().id == engine_id)
 }
 
 pub fn default_engine_ids() -> Vec<String> {

@@ -42,7 +42,14 @@ pub struct ValidatedSearchRequest(pub NormalizedQuery);
 fn clean_list(values: Vec<String>) -> Vec<String> {
     let mut cleaned: Vec<String> = values
         .into_iter()
-        .flat_map(|value| value.split(',').map(str::trim).filter(|part| !part.is_empty()).map(str::to_owned).collect::<Vec<_>>())
+        .flat_map(|value| {
+            value
+                .split(',')
+                .map(str::trim)
+                .filter(|part| !part.is_empty())
+                .map(str::to_owned)
+                .collect::<Vec<_>>()
+        })
         .collect();
     cleaned.sort();
     cleaned.dedup();
@@ -55,43 +62,67 @@ impl TryFrom<SearchRequest> for ValidatedSearchRequest {
     fn try_from(request: SearchRequest) -> Result<Self, Self::Error> {
         let mut violations = Vec::new();
         if request.query.is_some() && request.q.is_some() {
-            violations.push(FieldViolation { field: "query".into(), message: "provide either query or q, not both".into() });
+            violations.push(FieldViolation {
+                field: "query".into(),
+                message: "provide either query or q, not both".into(),
+            });
         }
 
         let raw_query = request.query.or(request.q).unwrap_or_default();
         let text = match normalize_query(&raw_query) {
             Ok(query) => query,
             Err(error) => {
-                violations.push(FieldViolation { field: "query".into(), message: error.to_string() });
+                violations.push(FieldViolation {
+                    field: "query".into(),
+                    message: error.to_string(),
+                });
                 String::new()
             }
         };
 
         let engines = clean_list(request.engines);
         if engines.len() > MAX_ENGINE_COUNT {
-            violations.push(FieldViolation { field: "engines".into(), message: format!("at most {MAX_ENGINE_COUNT} engines may be selected") });
+            violations.push(FieldViolation {
+                field: "engines".into(),
+                message: format!("at most {MAX_ENGINE_COUNT} engines may be selected"),
+            });
         }
 
         let categories = clean_list(request.categories);
         if categories.len() > MAX_CATEGORY_COUNT {
-            violations.push(FieldViolation { field: "categories".into(), message: format!("at most {MAX_CATEGORY_COUNT} categories may be selected") });
+            violations.push(FieldViolation {
+                field: "categories".into(),
+                message: format!("at most {MAX_CATEGORY_COUNT} categories may be selected"),
+            });
         }
 
         if request.page.is_some() && request.cursor.is_some() {
-            violations.push(FieldViolation { field: "page".into(), message: "page and cursor are mutually exclusive".into() });
+            violations.push(FieldViolation {
+                field: "page".into(),
+                message: "page and cursor are mutually exclusive".into(),
+            });
         }
         if request.page == Some(0) {
-            violations.push(FieldViolation { field: "page".into(), message: "page must be at least 1".into() });
+            violations.push(FieldViolation {
+                field: "page".into(),
+                message: "page must be at least 1".into(),
+            });
         }
 
         let limit = request.limit.unwrap_or(DEFAULT_RESULT_LIMIT);
         if limit == 0 || limit > MAX_RESULT_LIMIT {
-            violations.push(FieldViolation { field: "limit".into(), message: format!("limit must be between 1 and {MAX_RESULT_LIMIT}") });
+            violations.push(FieldViolation {
+                field: "limit".into(),
+                message: format!("limit must be between 1 and {MAX_RESULT_LIMIT}"),
+            });
         }
 
         let timeout_ms = request.timeout_ms.unwrap_or(DEFAULT_OVERALL_TIMEOUT_MS);
         if timeout_ms == 0 || timeout_ms > MAX_OVERALL_TIMEOUT_MS {
-            violations.push(FieldViolation { field: "timeout_ms".into(), message: format!("timeout_ms must be between 1 and {MAX_OVERALL_TIMEOUT_MS}") });
+            violations.push(FieldViolation {
+                field: "timeout_ms".into(),
+                message: format!("timeout_ms must be between 1 and {MAX_OVERALL_TIMEOUT_MS}"),
+            });
         }
 
         if !violations.is_empty() {
@@ -102,7 +133,10 @@ impl TryFrom<SearchRequest> for ValidatedSearchRequest {
             text,
             engines,
             categories,
-            page: request.page.or(Some(1)).filter(|_| request.cursor.is_none()),
+            page: request
+                .page
+                .or(Some(1))
+                .filter(|_| request.cursor.is_none()),
             cursor: request.cursor,
             limit,
             locale: request.locale.filter(|value| !value.trim().is_empty()),
@@ -116,7 +150,9 @@ impl TryFrom<SearchRequest> for ValidatedSearchRequest {
 }
 
 impl From<ValidatedSearchRequest> for NormalizedQuery {
-    fn from(request: ValidatedSearchRequest) -> Self { request.0 }
+    fn from(request: ValidatedSearchRequest) -> Self {
+        request.0
+    }
 }
 
 #[cfg(test)]
@@ -125,7 +161,11 @@ mod tests {
 
     #[test]
     fn validates_defaults_and_alias() {
-        let validated = ValidatedSearchRequest::try_from(SearchRequest { q: Some("  cloudflare   rust ".into()), ..SearchRequest::default() }).unwrap();
+        let validated = ValidatedSearchRequest::try_from(SearchRequest {
+            q: Some("  cloudflare   rust ".into()),
+            ..SearchRequest::default()
+        })
+        .unwrap();
         assert_eq!(validated.0.text, "cloudflare rust");
         assert_eq!(validated.0.limit, 10);
         assert_eq!(validated.0.timeout_ms, 5_000);
@@ -133,13 +173,24 @@ mod tests {
 
     #[test]
     fn rejects_page_and_cursor() {
-        let error = ValidatedSearchRequest::try_from(SearchRequest { query: Some("rust".into()), page: Some(2), cursor: Some("cursor".into()), ..SearchRequest::default() }).unwrap_err();
+        let error = ValidatedSearchRequest::try_from(SearchRequest {
+            query: Some("rust".into()),
+            page: Some(2),
+            cursor: Some("cursor".into()),
+            ..SearchRequest::default()
+        })
+        .unwrap_err();
         assert_eq!(error.violations[0].field, "page");
     }
 
     #[test]
     fn rejects_more_than_five_engines() {
-        let error = ValidatedSearchRequest::try_from(SearchRequest { query: Some("rust".into()), engines: (0..6).map(|index| format!("engine-{index}")).collect(), ..SearchRequest::default() }).unwrap_err();
+        let error = ValidatedSearchRequest::try_from(SearchRequest {
+            query: Some("rust".into()),
+            engines: (0..6).map(|index| format!("engine-{index}")).collect(),
+            ..SearchRequest::default()
+        })
+        .unwrap_err();
         assert_eq!(error.violations[0].field, "engines");
     }
 }

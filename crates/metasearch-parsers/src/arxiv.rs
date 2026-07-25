@@ -87,11 +87,19 @@ pub fn parse_arxiv_atom(xml: &[u8]) -> Result<Vec<ArxivRecord>, ParserError> {
                 title: clean(&entry.title),
                 canonical_url: entry.id,
                 abstract_text: clean(&entry.summary),
-                authors: entry.authors.into_iter().map(|author| clean(&author.name)).collect(),
+                authors: entry
+                    .authors
+                    .into_iter()
+                    .map(|author| clean(&author.name))
+                    .collect(),
                 pdf_url,
                 doi: entry.doi.map(|value| clean(&value)),
                 journal_reference: entry.journal_reference.map(|value| clean(&value)),
-                categories: entry.categories.into_iter().map(|category| category.term).collect(),
+                categories: entry
+                    .categories
+                    .into_iter()
+                    .map(|category| category.term)
+                    .collect(),
                 comments: entry.comments.map(|value| clean(&value)),
                 published_at: entry.published,
             }

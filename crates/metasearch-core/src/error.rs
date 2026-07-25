@@ -49,7 +49,10 @@ impl EngineFailure {
         kind: FailureKind,
         message: impl Into<String>,
     ) -> Self {
-        let retryable = matches!(kind, FailureKind::EngineTimeout | FailureKind::EngineRateLimited);
+        let retryable = matches!(
+            kind,
+            FailureKind::EngineTimeout | FailureKind::EngineRateLimited
+        );
         Self {
             engine_id: engine_id.into(),
             kind,

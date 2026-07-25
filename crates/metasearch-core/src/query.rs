@@ -13,7 +13,9 @@ impl Display for QueryNormalizationError {
         match self {
             Self::Empty => formatter.write_str("query must not be empty"),
             Self::TooLong => formatter.write_str("query must contain at most 499 characters"),
-            Self::ControlCharacter => formatter.write_str("query must not contain control characters"),
+            Self::ControlCharacter => {
+                formatter.write_str("query must not contain control characters")
+            }
         }
     }
 }
@@ -73,7 +75,10 @@ mod tests {
 
     #[test]
     fn trims_collapses_and_normalizes_unicode() {
-        assert_eq!(normalize_query("  cafe\u{301}   rust  ").unwrap(), "café rust");
+        assert_eq!(
+            normalize_query("  cafe\u{301}   rust  ").unwrap(),
+            "café rust"
+        );
     }
 
     #[test]
@@ -95,6 +100,9 @@ mod tests {
     #[test]
     fn rejects_too_long_queries() {
         let query = "x".repeat(500);
-        assert_eq!(normalize_query(&query), Err(QueryNormalizationError::TooLong));
+        assert_eq!(
+            normalize_query(&query),
+            Err(QueryNormalizationError::TooLong)
+        );
     }
 }

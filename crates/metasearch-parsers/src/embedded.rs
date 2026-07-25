@@ -10,9 +10,14 @@ pub fn extract_embedded_json(
     if source.len() > max_source_len {
         return Err(ParserError::SourceTooLarge);
     }
-    let marker_index = source.find(marker).ok_or(ParserError::EmbeddedDataNotFound)?;
+    let marker_index = source
+        .find(marker)
+        .ok_or(ParserError::EmbeddedDataNotFound)?;
     let remainder = source[marker_index + marker.len()..].trim_start();
-    let first = remainder.chars().next().ok_or(ParserError::InvalidEmbeddedData)?;
+    let first = remainder
+        .chars()
+        .next()
+        .ok_or(ParserError::InvalidEmbeddedData)?;
     if !matches!(first, '{' | '[') {
         return Err(ParserError::InvalidEmbeddedData);
     }

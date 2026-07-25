@@ -47,7 +47,8 @@ pub fn build_cache_key(input: &CacheKeyInput<'_>) -> String {
         "ranking": input.ranking,
         "ranking_version": RANKING_VERSION,
     });
-    let digest = Sha256::digest(serde_json::to_vec(&material).expect("cache key material serializes"));
+    let digest =
+        Sha256::digest(serde_json::to_vec(&material).expect("cache key material serializes"));
     format!("https://cache.searxflare.invalid/{API_VERSION}/search/{digest:x}")
 }
 
@@ -74,6 +75,9 @@ mod tests {
             parser_versions: &parser_versions,
             ranking: RankingStrategy::RrfV1,
         };
-        assert_eq!(build_cache_key(&make(&left_engines)), build_cache_key(&make(&right_engines)));
+        assert_eq!(
+            build_cache_key(&make(&left_engines)),
+            build_cache_key(&make(&right_engines))
+        );
     }
 }

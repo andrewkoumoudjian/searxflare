@@ -18,7 +18,13 @@ pub static DESCRIPTOR: EngineDescriptor = EngineDescriptor {
     source_kind: SourceKind::Html,
     maturity: EngineMaturity::Experimental,
     allowed_hosts: &["html.duckduckgo.com", "duckduckgo.com"],
-    capabilities: EngineCapabilities { paging: false, locale: true, country: false, safe_search: true, time_range: true },
+    capabilities: EngineCapabilities {
+        paging: false,
+        locale: true,
+        country: false,
+        safe_search: true,
+        time_range: true,
+    },
     timeout_ms: HTML_ENGINE_TIMEOUT_MS,
     max_body_bytes: DEFAULT_MAX_BODY_BYTES,
     max_steps: DEFAULT_MAX_STEPS,
@@ -28,7 +34,10 @@ pub static DESCRIPTOR: EngineDescriptor = EngineDescriptor {
     default_enabled: true,
     allow_http: false,
     state_policy: StatePolicy::Stateless,
-    cache_policy: CachePolicy { response_ttl_seconds: 180, negative_ttl_seconds: 30 },
+    cache_policy: CachePolicy {
+        response_ttl_seconds: 180,
+        negative_ttl_seconds: 30,
+    },
     bot_auth_policy: BotAuthPolicy::Disabled,
 };
 
@@ -67,7 +76,9 @@ fn time_range_code(time_range: Option<TimeRange>) -> Option<&'static str> {
 }
 
 fn unwrap_redirect(url: &str) -> String {
-    let Ok(parsed) = Url::parse(url) else { return url.to_owned() };
+    let Ok(parsed) = Url::parse(url) else {
+        return url.to_owned();
+    };
     let host = parsed.host_str().unwrap_or_default();
     if !matches!(host, "duckduckgo.com" | "html.duckduckgo.com") {
         return url.to_owned();
@@ -84,7 +95,9 @@ fn unwrap_redirect(url: &str) -> String {
 
 #[async_trait::async_trait(?Send)]
 impl SearchEngine for DuckDuckGoHtmlEngine {
-    fn descriptor(&self) -> &'static EngineDescriptor { &DESCRIPTOR }
+    fn descriptor(&self) -> &'static EngineDescriptor {
+        &DESCRIPTOR
+    }
 
     async fn search(
         &self,
@@ -98,8 +111,9 @@ impl SearchEngine for DuckDuckGoHtmlEngine {
                 "DuckDuckGo HTML continuation requires query-bound VQD state and is out of scope for this cycle",
             ));
         }
-        let url = Url::parse("https://html.duckduckgo.com/html/")
-            .map_err(|error| EngineFailure::new(DESCRIPTOR.id, FailureKind::Internal, error.to_string()))?;
+        let url = Url::parse("https://html.duckduckgo.com/html/").map_err(|error| {
+            EngineFailure::new(DESCRIPTOR.id, FailureKind::Internal, error.to_string())
+        })?;
         let locale = locale_code(query.locale.as_deref());
         let safe_search = safe_search_code(query.safe_search);
         let mut form = vec![
@@ -112,7 +126,9 @@ impl SearchEngine for DuckDuckGoHtmlEngine {
             form.push(("df", code));
         }
         let body = serde_urlencoded::to_string(form)
-            .map_err(|error| EngineFailure::new(DESCRIPTOR.id, FailureKind::Internal, error.to_string()))?
+            .map_err(|error| {
+                EngineFailure::new(DESCRIPTOR.id, FailureKind::Internal, error.to_string())
+            })?
             .into_bytes();
         let mut cookies = BTreeMap::from([
             ("kl".into(), locale.clone()),
@@ -139,9 +155,18 @@ impl SearchEngine for DuckDuckGoHtmlEngine {
             body: Some(body),
             accepted_content_types: &["text/html", "application/xhtml+xml"],
         };
-        let response = context.http.send(&DESCRIPTOR, request, context.deadline).await?;
-        let parsed = parse_selector_results(&response.body, &url, &SELECTORS, 20)
-            .map_err(|error| EngineFailure::new(DESCRIPTOR.id, FailureKind::EngineParseFailed, error.to_string()))?;
+        let response = context
+            .http
+            .send(&DESCRIPTOR, request, context.deadline)
+            .await?;
+        let parsed =
+            parse_selector_results(&response.body, &url, &SELECTORS, 20).map_err(|error| {
+                EngineFailure::new(
+                    DESCRIPTOR.id,
+                    FailureKind::EngineParseFailed,
+                    error.to_string(),
+                )
+            })?;
         let results = parsed
             .into_iter()
             .enumerate()
@@ -178,6 +203,9 @@ mod tests {
             unwrap_redirect("https://duckduckgo.com/l/?uddg=https%3A%2F%2Fexample.com%2Fitem"),
             "https://example.com/item"
         );
-        assert_eq!(unwrap_redirect("https://example.com/l/?uddg=https://evil.test"), "https://example.com/l/?uddg=https://evil.test");
+        assert_eq!(
+            unwrap_redirect("https://example.com/l/?uddg=https://evil.test"),
+            "https://example.com/l/?uddg=https://evil.test"
+        );
     }
 }

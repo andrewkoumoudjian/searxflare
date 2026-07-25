@@ -32,18 +32,20 @@ struct EngineRun {
 }
 
 pub async fn handle(req: Request, env: Env, ctx: Context) -> worker::Result<Response> {
-    Router::with_data(AppData { execution: Rc::new(ctx) })
-        .get_async("/healthz", healthz)
-        .get_async("/readyz", readyz)
-        .get_async("/v1/search", search_get)
-        .post_async("/v1/search", search_post)
-        .get_async("/v1/engines", engines)
-        .get_async("/v1/engines/:engine_id", engine)
-        .get_async("/v1/engines/:engine_id/search", engine_search)
-        .get_async("/search", searx_compat)
-        .or_else_any_method_async("/*path", not_found)
-        .run(req, env)
-        .await
+    Router::with_data(AppData {
+        execution: Rc::new(ctx),
+    })
+    .get_async("/healthz", healthz)
+    .get_async("/readyz", readyz)
+    .get_async("/v1/search", search_get)
+    .post_async("/v1/search", search_post)
+    .get_async("/v1/engines", engines)
+    .get_async("/v1/engines/:engine_id", engine)
+    .get_async("/v1/engines/:engine_id/search", engine_search)
+    .get_async("/search", searx_compat)
+    .or_else_any_method_async("/*path", not_found)
+    .run(req, env)
+    .await
 }
 
 fn request_id() -> String {
@@ -58,11 +60,18 @@ fn response_headers(request_id: &str, content_type: &str) -> worker::Result<Head
     Ok(headers)
 }
 
-fn json_response<T: Serialize>(value: &T, status: u16, request_id: &str) -> worker::Result<Response> {
+fn json_response<T: Serialize>(
+    value: &T,
+    status: u16,
+    request_id: &str,
+) -> worker::Result<Response> {
     let bytes = serde_json::to_vec(value)?;
     Ok(ResponseBuilder::new()
         .with_status(status)
-        .with_headers(response_headers(request_id, "application/json; charset=utf-8")?)
+        .with_headers(response_headers(
+            request_id,
+            "application/json; charset=utf-8",
+        )?)
         .fixed(bytes))
 }
 
@@ -71,7 +80,10 @@ fn problem_response(error: ApiError, instance: &str, request_id: &str) -> worker
     let bytes = serde_json::to_vec(&problem)?;
     Ok(ResponseBuilder::new()
         .with_status(problem.status)
-        .with_headers(response_headers(request_id, "application/problem+json; charset=utf-8")?)
+        .with_headers(response_headers(
+            request_id,
+            "application/problem+json; charset=utf-8",
+        )?)
         .fixed(bytes))
 }
 
@@ -89,11 +101,24 @@ fn authenticate(req: &Request, env: &Env) -> Result<(), ApiError> {
     let authorization = req
         .headers()
         .get("authorization")
-        .map_err(|_| ApiError::new(ErrorCode::AuthenticationRequired, "invalid Authorization header"))?
-        .ok_or_else(|| ApiError::new(ErrorCode::AuthenticationRequired, "Bearer API key is required"))?;
-    let key = authorization
-        .strip_prefix("Bearer ")
-        .ok_or_else(|| ApiError::new(ErrorCode::AuthenticationRequired, "Authorization must use the Bearer scheme"))?;
+        .map_err(|_| {
+            ApiError::new(
+                ErrorCode::AuthenticationRequired,
+                "invalid Authorization header",
+            )
+        })?
+        .ok_or_else(|| {
+            ApiError::new(
+                ErrorCode::AuthenticationRequired,
+                "Bearer API key is required",
+            )
+        })?;
+    let key = authorization.strip_prefix("Bearer ").ok_or_else(|| {
+        ApiError::new(
+            ErrorCode::AuthenticationRequired,
+            "Authorization must use the Bearer scheme",
+        )
+    })?;
     let expected = env
         .secret("API_KEY_SHA256")
         .map_err(|_| ApiError::new(ErrorCode::InternalError, "API key secret is not configured"))?
@@ -101,8 +126,13 @@ fn authenticate(req: &Request, env: &Env) -> Result<(), ApiError> {
         .trim()
         .to_ascii_lowercase();
     let actual = sha256_hex(key.as_bytes());
-    if expected.len() != actual.len() || expected.as_bytes().ct_eq(actual.as_bytes()).unwrap_u8() != 1 {
-        return Err(ApiError::new(ErrorCode::AuthenticationRequired, "API key is invalid"));
+    if expected.len() != actual.len()
+        || expected.as_bytes().ct_eq(actual.as_bytes()).unwrap_u8() != 1
+    {
+        return Err(ApiError::new(
+            ErrorCode::AuthenticationRequired,
+            "API key is invalid",
+        ));
     }
     Ok(())
 }
@@ -114,9 +144,17 @@ async fn healthz(_req: Request, _ctx: RouteContext<AppData>) -> worker::Result<R
 async fn readyz(_req: Request, ctx: RouteContext<AppData>) -> worker::Result<Response> {
     let id = request_id();
     if ctx.env.secret("API_KEY_SHA256").is_ok() {
-        json_response(&serde_json::json!({"status":"ready","registry_version":ENGINE_REGISTRY_VERSION}), 200, &id)
+        json_response(
+            &serde_json::json!({"status":"ready","registry_version":ENGINE_REGISTRY_VERSION}),
+            200,
+            &id,
+        )
     } else {
-        json_response(&serde_json::json!({"status":"not_ready","reason":"API_KEY_SHA256 is missing"}), 503, &id)
+        json_response(
+            &serde_json::json!({"status":"not_ready","reason":"API_KEY_SHA256 is missing"}),
+            503,
+            &id,
+        )
     }
 }
 
@@ -158,25 +196,46 @@ fn parse_ranking(value: Option<String>) -> Option<RankingStrategy> {
 }
 
 fn request_from_url(req: &Request, compatibility: bool) -> Result<SearchRequest, ApiError> {
-    let url = req.url().map_err(|error| ApiError::new(ErrorCode::InvalidRequest, error.to_string()))?;
+    let url = req
+        .url()
+        .map_err(|error| ApiError::new(ErrorCode::InvalidRequest, error.to_string()))?;
     let values: BTreeMap<String, String> = url.query_pairs().into_owned().collect();
     if compatibility && values.get("format").map(String::as_str) != Some("json") {
-        return Err(ApiError::new(ErrorCode::InvalidRequest, "the compatibility route only supports format=json"));
+        return Err(ApiError::new(
+            ErrorCode::InvalidRequest,
+            "the compatibility route only supports format=json",
+        ));
     }
     Ok(SearchRequest {
-        query: (!compatibility).then(|| values.get("query").cloned()).flatten(),
+        query: (!compatibility)
+            .then(|| values.get("query").cloned())
+            .flatten(),
         q: values.get("q").cloned(),
         engines: parse_csv(values.get("engines").cloned()),
         categories: parse_csv(values.get("categories").cloned()),
-        page: values.get(if compatibility { "pageno" } else { "page" }).and_then(|value| value.parse().ok()),
+        page: values
+            .get(if compatibility { "pageno" } else { "page" })
+            .and_then(|value| value.parse().ok()),
         cursor: values.get("cursor").cloned(),
         limit: values.get("limit").and_then(|value| value.parse().ok()),
-        locale: values.get(if compatibility { "language" } else { "locale" }).cloned(),
+        locale: values
+            .get(if compatibility { "language" } else { "locale" })
+            .cloned(),
         country: values.get("country").cloned(),
-        safe_search: parse_safe_search(values.get(if compatibility { "safesearch" } else { "safe_search" }).cloned()),
+        safe_search: parse_safe_search(
+            values
+                .get(if compatibility {
+                    "safesearch"
+                } else {
+                    "safe_search"
+                })
+                .cloned(),
+        ),
         time_range: parse_time_range(values.get("time_range").cloned()),
         ranking: parse_ranking(values.get("ranking").cloned()),
-        timeout_ms: values.get("timeout_ms").and_then(|value| value.parse().ok()),
+        timeout_ms: values
+            .get("timeout_ms")
+            .and_then(|value| value.parse().ok()),
     })
 }
 
@@ -187,7 +246,14 @@ fn select_engines(query: &NormalizedQuery) -> Result<Vec<&'static RegisteredEngi
         } else {
             registry()
                 .iter()
-                .filter(|engine| engine.descriptor().categories.iter().any(|category| query.categories.iter().any(|requested| requested == category)))
+                .filter(|engine| {
+                    engine.descriptor().categories.iter().any(|category| {
+                        query
+                            .categories
+                            .iter()
+                            .any(|requested| requested == category)
+                    })
+                })
                 .map(|engine| engine.descriptor().id.to_owned())
                 .collect()
         };
@@ -198,28 +264,43 @@ fn select_engines(query: &NormalizedQuery) -> Result<Vec<&'static RegisteredEngi
 
     let mut selected = Vec::new();
     for engine_id in requested {
-        let engine = find_engine(&engine_id)
-            .ok_or_else(|| ApiError::new(ErrorCode::UnknownEngine, format!("unknown engine: {engine_id}")))?;
+        let engine = find_engine(&engine_id).ok_or_else(|| {
+            ApiError::new(
+                ErrorCode::UnknownEngine,
+                format!("unknown engine: {engine_id}"),
+            )
+        })?;
         if !engine.descriptor().default_enabled && query.engines.is_empty() {
             continue;
         }
         selected.push(engine);
     }
     if selected.is_empty() {
-        return Err(ApiError::new(ErrorCode::NoEngineSucceeded, "no enabled engine matches the request"));
+        return Err(ApiError::new(
+            ErrorCode::NoEngineSucceeded,
+            "no enabled engine matches the request",
+        ));
     }
     Ok(selected)
 }
 
 fn engine_cache_key(query: &NormalizedQuery, engine: &'static RegisteredEngine) -> String {
     let engines = vec![engine.descriptor().id.to_owned()];
-    let parsers = vec![format!("{}:{}", engine.descriptor().id, engine.descriptor().parser_version)];
+    let parsers = vec![format!(
+        "{}:{}",
+        engine.descriptor().id,
+        engine.descriptor().parser_version
+    )];
     build_cache_key(&CacheKeyInput {
         normalized_query: &query.text,
         engine_ids: &engines,
         categories: &query.categories,
         page: query.page,
-        cursor_hash: query.cursor.as_deref().map(|cursor| sha256_hex(cursor.as_bytes())).as_deref(),
+        cursor_hash: query
+            .cursor
+            .as_deref()
+            .map(|cursor| sha256_hex(cursor.as_bytes()))
+            .as_deref(),
         limit: query.limit,
         locale: query.locale.as_deref(),
         country: query.country.as_deref(),
@@ -281,13 +362,27 @@ async fn run_engine(
     }
 
     let result = engine
-        .search(query, &EngineContext { http, state, deadline, request_id })
+        .search(
+            query,
+            &EngineContext {
+                http,
+                state,
+                deadline,
+                request_id,
+            },
+        )
         .await;
     let duration_ms = (Date::now().as_millis() as u64).saturating_sub(started);
     match result {
         Ok(output) => {
             if let Ok(cache_response) = ResponseBuilder::new()
-                .with_header("cache-control", &format!("s-maxage={}", engine.descriptor().cache_policy.response_ttl_seconds))
+                .with_header(
+                    "cache-control",
+                    &format!(
+                        "s-maxage={}",
+                        engine.descriptor().cache_policy.response_ttl_seconds
+                    ),
+                )
                 .and_then(|builder| builder.from_json(&output))
             {
                 execution.wait_until(async move {
@@ -308,7 +403,13 @@ async fn run_engine(
         }
         Err(failure) => {
             if let Ok(cache_response) = ResponseBuilder::new()
-                .with_header("cache-control", &format!("s-maxage={}", engine.descriptor().cache_policy.negative_ttl_seconds))
+                .with_header(
+                    "cache-control",
+                    &format!(
+                        "s-maxage={}",
+                        engine.descriptor().cache_policy.negative_ttl_seconds
+                    ),
+                )
                 .and_then(|builder| builder.with_header("x-searxflare-negative", "1"))
                 .and_then(|builder| builder.from_json(&failure))
             {
@@ -332,9 +433,24 @@ async fn run_engine(
 }
 
 fn aggregate_cache_key(query: &NormalizedQuery, selected: &[&'static RegisteredEngine]) -> String {
-    let engines: Vec<String> = selected.iter().map(|engine| engine.descriptor().id.into()).collect();
-    let parsers: Vec<String> = selected.iter().map(|engine| format!("{}:{}", engine.descriptor().id, engine.descriptor().parser_version)).collect();
-    let cursor_hash = query.cursor.as_deref().map(|cursor| sha256_hex(cursor.as_bytes()));
+    let engines: Vec<String> = selected
+        .iter()
+        .map(|engine| engine.descriptor().id.into())
+        .collect();
+    let parsers: Vec<String> = selected
+        .iter()
+        .map(|engine| {
+            format!(
+                "{}:{}",
+                engine.descriptor().id,
+                engine.descriptor().parser_version
+            )
+        })
+        .collect();
+    let cursor_hash = query
+        .cursor
+        .as_deref()
+        .map(|cursor| sha256_hex(cursor.as_bytes()));
     build_cache_key(&CacheKeyInput {
         normalized_query: &query.text,
         engine_ids: &engines,
@@ -368,26 +484,45 @@ fn failure_code(failure: &EngineFailure) -> ErrorCode {
 }
 
 fn log_search(query: &NormalizedQuery, response: &SearchResponse, duration_ms: u64) {
-    let successful: Vec<&str> = response.engines.iter().filter(|report| report.failure_kind.is_none()).map(|report| report.engine_id.as_str()).collect();
-    let failed: Vec<&str> = response.engines.iter().filter(|report| report.failure_kind.is_some()).map(|report| report.engine_id.as_str()).collect();
-    console_log!("{}", serde_json::json!({
-        "event":"search_complete",
-        "request_id":response.request_id,
-        "query_hash":sha256_hex(query.text.as_bytes()),
-        "selected_engines":response.engines.iter().map(|report| report.engine_id.as_str()).collect::<Vec<_>>(),
-        "successful_engines":successful,
-        "failed_engines":failed,
-        "cache_status":if response.cached {"hit"} else {"miss"},
-        "duration_ms":duration_ms,
-        "result_count":response.result_count,
-        "partial":response.partial,
-    }));
+    let successful: Vec<&str> = response
+        .engines
+        .iter()
+        .filter(|report| report.failure_kind.is_none())
+        .map(|report| report.engine_id.as_str())
+        .collect();
+    let failed: Vec<&str> = response
+        .engines
+        .iter()
+        .filter(|report| report.failure_kind.is_some())
+        .map(|report| report.engine_id.as_str())
+        .collect();
+    console_log!(
+        "{}",
+        serde_json::json!({
+            "event":"search_complete",
+            "request_id":response.request_id,
+            "query_hash":sha256_hex(query.text.as_bytes()),
+            "selected_engines":response.engines.iter().map(|report| report.engine_id.as_str()).collect::<Vec<_>>(),
+            "successful_engines":successful,
+            "failed_engines":failed,
+            "cache_status":if response.cached {"hit"} else {"miss"},
+            "duration_ms":duration_ms,
+            "result_count":response.result_count,
+            "partial":response.partial,
+        })
+    );
 }
 
 fn write_analytics(env: &Env, reports: &[EngineExecutionReport]) {
-    let Ok(dataset) = env.analytics_engine("SEARCH_ANALYTICS") else { return };
+    let Ok(dataset) = env.analytics_engine("SEARCH_ANALYTICS") else {
+        return;
+    };
     for report in reports {
-        let outcome = if report.failure_kind.is_some() { "failure" } else { "success" };
+        let outcome = if report.failure_kind.is_some() {
+            "failure"
+        } else {
+            "success"
+        };
         let cache_status = format!("{:?}", report.cache_status).to_ascii_lowercase();
         let _ = AnalyticsEngineDataPointBuilder::new()
             .indexes([report.engine_id.as_str()])
@@ -457,7 +592,11 @@ async fn execute_search(
                     }
                 }
                 if let Some(message) = engine_invalid {
-                    failures.push(EngineFailure::new("normalization", FailureKind::EngineParseFailed, message));
+                    failures.push(EngineFailure::new(
+                        "normalization",
+                        FailureKind::EngineParseFailed,
+                        message,
+                    ));
                 } else {
                     normalized.extend(engine_results);
                 }
@@ -471,7 +610,11 @@ async fn execute_search(
         let first = &failures[0];
         return Err(ApiError::new(
             ErrorCode::NoEngineSucceeded,
-            format!("all selected engines failed; first failure was {}: {}", failure_code(first).as_str(), first.message),
+            format!(
+                "all selected engines failed; first failure was {}: {}",
+                failure_code(first).as_str(),
+                first.message
+            ),
         ));
     }
 
@@ -493,7 +636,11 @@ async fn execute_search(
     let ttl = if partial {
         20
     } else {
-        selected.iter().map(|engine| engine.descriptor().cache_policy.response_ttl_seconds).min().unwrap_or(180)
+        selected
+            .iter()
+            .map(|engine| engine.descriptor().cache_policy.response_ttl_seconds)
+            .min()
+            .unwrap_or(180)
     };
     if let Ok(cache_response) = ResponseBuilder::new()
         .with_header("cache-control", &format!("s-maxage={ttl}"))
@@ -528,7 +675,11 @@ async fn handle_search_request(
     let started = Date::now().as_millis() as u64;
     match execute_search(query.clone(), &ctx, &id).await {
         Ok(response) => {
-            log_search(&query, &response, (Date::now().as_millis() as u64).saturating_sub(started));
+            log_search(
+                &query,
+                &response,
+                (Date::now().as_millis() as u64).saturating_sub(started),
+            );
             json_response(&response, 200, &id)
         }
         Err(error) => problem_response(error, &path, &id),
@@ -550,7 +701,13 @@ async fn search_post(mut req: Request, ctx: RouteContext<AppData>) -> worker::Re
     }
     let request = match req.json::<SearchRequest>().await {
         Ok(request) => request,
-        Err(error) => return problem_response(ApiError::new(ErrorCode::InvalidRequest, error.to_string()), &req.path(), &id),
+        Err(error) => {
+            return problem_response(
+                ApiError::new(ErrorCode::InvalidRequest, error.to_string()),
+                &req.path(),
+                &id,
+            )
+        }
     };
     handle_search_request(req, ctx, request, false).await
 }
@@ -562,7 +719,12 @@ async fn engines(req: Request, ctx: RouteContext<AppData>) -> worker::Result<Res
     }
     let response = EngineCatalogueResponse {
         registry_version: ENGINE_REGISTRY_VERSION,
-        engines: registry().iter().map(|engine| EngineDescriptorResponse { descriptor: engine.descriptor() }).collect(),
+        engines: registry()
+            .iter()
+            .map(|engine| EngineDescriptorResponse {
+                descriptor: engine.descriptor(),
+            })
+            .collect(),
     };
     json_response(&response, 200, &id)
 }
@@ -572,10 +734,26 @@ async fn engine(req: Request, ctx: RouteContext<AppData>) -> worker::Result<Resp
     if let Err(error) = authenticate(&req, &ctx.env) {
         return problem_response(error, &req.path(), &id);
     }
-    let engine_id = ctx.param("engine_id").map(String::as_str).unwrap_or_default();
+    let engine_id = ctx
+        .param("engine_id")
+        .map(String::as_str)
+        .unwrap_or_default();
     match find_engine(engine_id) {
-        Some(engine) => json_response(&EngineDescriptorResponse { descriptor: engine.descriptor() }, 200, &id),
-        None => problem_response(ApiError::new(ErrorCode::UnknownEngine, format!("unknown engine: {engine_id}")), &req.path(), &id),
+        Some(engine) => json_response(
+            &EngineDescriptorResponse {
+                descriptor: engine.descriptor(),
+            },
+            200,
+            &id,
+        ),
+        None => problem_response(
+            ApiError::new(
+                ErrorCode::UnknownEngine,
+                format!("unknown engine: {engine_id}"),
+            ),
+            &req.path(),
+            &id,
+        ),
     }
 }
 
@@ -608,7 +786,15 @@ async fn searx_compat(req: Request, ctx: RouteContext<AppData>) -> worker::Resul
                 answers: Vec::new(),
                 corrections: Vec::new(),
                 suggestions: Vec::new(),
-                unresponsive_engines: response.engines.into_iter().filter_map(|report| report.failure_kind.map(|failure| (report.engine_id, failure))).collect(),
+                unresponsive_engines: response
+                    .engines
+                    .into_iter()
+                    .filter_map(|report| {
+                        report
+                            .failure_kind
+                            .map(|failure| (report.engine_id, failure))
+                    })
+                    .collect(),
             };
             json_response(&compatibility, 200, &id)
         }
@@ -618,5 +804,9 @@ async fn searx_compat(req: Request, ctx: RouteContext<AppData>) -> worker::Resul
 
 async fn not_found(req: Request, _ctx: RouteContext<AppData>) -> worker::Result<Response> {
     let id = request_id();
-    problem_response(ApiError::new(ErrorCode::InvalidRequest, "route not found"), &req.path(), &id)
+    problem_response(
+        ApiError::new(ErrorCode::InvalidRequest, "route not found"),
+        &req.path(),
+        &id,
+    )
 }

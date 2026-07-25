@@ -14,8 +14,12 @@ impl Display for CanonicalizationError {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::InvalidUrl => formatter.write_str("invalid result URL"),
-            Self::UnsupportedScheme => formatter.write_str("only HTTP and HTTPS result URLs are allowed"),
-            Self::CredentialsNotAllowed => formatter.write_str("result URLs must not contain credentials"),
+            Self::UnsupportedScheme => {
+                formatter.write_str("only HTTP and HTTPS result URLs are allowed")
+            }
+            Self::CredentialsNotAllowed => {
+                formatter.write_str("result URLs must not contain credentials")
+            }
         }
     }
 }
@@ -73,7 +77,10 @@ mod tests {
 
     #[test]
     fn preserves_http_as_distinct() {
-        assert_eq!(canonicalize_url("http://example.com").unwrap(), "http://example.com/");
+        assert_eq!(
+            canonicalize_url("http://example.com").unwrap(),
+            "http://example.com/"
+        );
     }
 
     #[test]

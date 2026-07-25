@@ -4,4 +4,6 @@ mod response;
 
 pub use error::{ApiError, ErrorCode, FieldViolation, ProblemDetails};
 pub use request::{SearchRequest, ValidatedSearchRequest};
-pub use response::{EngineCatalogueResponse, EngineDescriptorResponse, SearchResponse, SearxCompatResponse};
+pub use response::{
+    EngineCatalogueResponse, EngineDescriptorResponse, SearchResponse, SearxCompatResponse,
+};

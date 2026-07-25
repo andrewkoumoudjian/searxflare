@@ -30,7 +30,11 @@ pub fn validate_destination(
         ));
     }
     let host = url.host_str().ok_or_else(|| {
-        EngineFailure::new(engine.id, FailureKind::EngineAccessDenied, "outbound URL has no host")
+        EngineFailure::new(
+            engine.id,
+            FailureKind::EngineAccessDenied,
+            "outbound URL has no host",
+        )
     })?;
     if !engine
         .allowed_hosts
@@ -48,17 +52,18 @@ pub fn validate_destination(
 
 fn content_type_matches(actual: Option<&str>, accepted: &[&str]) -> bool {
     let Some(actual) = actual else { return false };
-    let media_type = actual.split(';').next().unwrap_or_default().trim().to_ascii_lowercase();
+    let media_type = actual
+        .split(';')
+        .next()
+        .unwrap_or_default()
+        .trim()
+        .to_ascii_lowercase();
     accepted
         .iter()
         .any(|expected| media_type == expected.to_ascii_lowercase())
 }
 
-pub fn classify_challenge(
-    engine_id: &str,
-    status: u16,
-    body: &[u8],
-) -> Option<EngineFailure> {
+pub fn classify_challenge(engine_id: &str, status: u16, body: &[u8]) -> Option<EngineFailure> {
     if status == 429 {
         return Some(EngineFailure::new(
             engine_id,
@@ -67,8 +72,8 @@ pub fn classify_challenge(
         ));
     }
 
-    let scan = String::from_utf8_lossy(&body[..body.len().min(CHALLENGE_SCAN_LIMIT)])
-        .to_ascii_lowercase();
+    let scan =
+        String::from_utf8_lossy(&body[..body.len().min(CHALLENGE_SCAN_LIMIT)]).to_ascii_lowercase();
     let challenge_markers = [
         "cf-chl-",
         "cloudflare ray id",
@@ -90,7 +95,12 @@ pub fn classify_challenge(
         );
     }
 
-    let denied_markers = ["access denied", "request blocked", "permission denied", "forbidden"];
+    let denied_markers = [
+        "access denied",
+        "request blocked",
+        "permission denied",
+        "forbidden",
+    ];
     if status == 403 || denied_markers.iter().any(|marker| scan.contains(marker)) {
         return Some(
             EngineFailure::new(
@@ -120,8 +130,7 @@ mod wasm {
     use std::time::Duration;
     use wasm_bindgen::JsValue;
     use worker::{
-        AbortController, Date, Delay, Fetch, Headers, Method, Request, RequestInit,
-        RequestRedirect,
+        AbortController, Date, Delay, Fetch, Headers, Method, Request, RequestInit, RequestRedirect,
     };
 
     fn worker_error(engine_id: &str, error: impl ToString) -> EngineFailure {
@@ -190,7 +199,11 @@ mod wasm {
             Either::Left((response, _)) => response.map_err(|error| {
                 let message = error.to_string();
                 if message.contains("AbortError") {
-                    EngineFailure::new(engine_id, FailureKind::EngineTimeout, "engine fetch aborted")
+                    EngineFailure::new(
+                        engine_id,
+                        FailureKind::EngineTimeout,
+                        "engine fetch aborted",
+                    )
                 } else {
                     worker_error(engine_id, message)
                 }
@@ -295,7 +308,11 @@ mod wasm {
                         )
                     })?;
                     let next = request.url.join(location).map_err(|error| {
-                        EngineFailure::new(engine.id, FailureKind::EngineAccessDenied, error.to_string())
+                        EngineFailure::new(
+                            engine.id,
+                            FailureKind::EngineAccessDenied,
+                            error.to_string(),
+                        )
                     })?;
                     validate_destination(engine, &next)?;
                     let cross_host = request.url.host_str() != next.host_str();
@@ -322,7 +339,10 @@ mod wasm {
                     return Err(EngineFailure::new(
                         engine.id,
                         FailureKind::EngineInvalidContentType,
-                        format!("unexpected content type: {}", content_type.unwrap_or("missing")),
+                        format!(
+                            "unexpected content type: {}",
+                            content_type.unwrap_or("missing")
+                        ),
                     ));
                 }
                 if !(200..300).contains(&status) {
@@ -377,7 +397,13 @@ mod tests {
         source_kind: SourceKind::Html,
         maturity: EngineMaturity::Experimental,
         allowed_hosts: &["example.com"],
-        capabilities: EngineCapabilities { paging: false, locale: false, country: false, safe_search: false, time_range: false },
+        capabilities: EngineCapabilities {
+            paging: false,
+            locale: false,
+            country: false,
+            safe_search: false,
+            time_range: false,
+        },
         timeout_ms: 1_000,
         max_body_bytes: 1024,
         max_steps: 1,
@@ -387,15 +413,29 @@ mod tests {
         default_enabled: true,
         allow_http: false,
         state_policy: StatePolicy::Stateless,
-        cache_policy: CachePolicy { response_ttl_seconds: 10, negative_ttl_seconds: 5 },
+        cache_policy: CachePolicy {
+            response_ttl_seconds: 10,
+            negative_ttl_seconds: 5,
+        },
         bot_auth_policy: BotAuthPolicy::Disabled,
     };
 
     #[test]
     fn blocks_unlisted_hosts_and_credentials() {
-        assert!(validate_destination(&DESCRIPTOR, &Url::parse("https://example.com/path").unwrap()).is_ok());
-        assert!(validate_destination(&DESCRIPTOR, &Url::parse("https://evil.test/path").unwrap()).is_err());
-        assert!(validate_destination(&DESCRIPTOR, &Url::parse("https://user@example.com/path").unwrap()).is_err());
+        assert!(validate_destination(
+            &DESCRIPTOR,
+            &Url::parse("https://example.com/path").unwrap()
+        )
+        .is_ok());
+        assert!(
+            validate_destination(&DESCRIPTOR, &Url::parse("https://evil.test/path").unwrap())
+                .is_err()
+        );
+        assert!(validate_destination(
+            &DESCRIPTOR,
+            &Url::parse("https://user@example.com/path").unwrap()
+        )
+        .is_err());
     }
 
     #[test]
@@ -406,13 +446,25 @@ mod tests {
                 .kind,
             FailureKind::EngineChallenged
         );
-        assert_eq!(classify_challenge("test", 429, b"").unwrap().kind, FailureKind::EngineRateLimited);
-        assert_eq!(classify_challenge("test", 403, b"Forbidden").unwrap().kind, FailureKind::EngineAccessDenied);
+        assert_eq!(
+            classify_challenge("test", 429, b"").unwrap().kind,
+            FailureKind::EngineRateLimited
+        );
+        assert_eq!(
+            classify_challenge("test", 403, b"Forbidden").unwrap().kind,
+            FailureKind::EngineAccessDenied
+        );
     }
 
     #[test]
     fn validates_content_types_without_parameters() {
-        assert!(content_type_matches(Some("text/html; charset=UTF-8"), &["text/html"]));
-        assert!(!content_type_matches(Some("application/json"), &["text/html"]));
+        assert!(content_type_matches(
+            Some("text/html; charset=UTF-8"),
+            &["text/html"]
+        ));
+        assert!(!content_type_matches(
+            Some("application/json"),
+            &["text/html"]
+        ));
     }
 }

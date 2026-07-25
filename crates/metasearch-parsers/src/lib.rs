@@ -27,10 +27,16 @@ impl Display for ParserError {
             Self::InvalidXml(message) => write!(formatter, "invalid XML: {message}"),
             Self::InvalidHtml(message) => write!(formatter, "invalid HTML: {message}"),
             Self::InvalidUrl(message) => write!(formatter, "invalid URL: {message}"),
-            Self::SourceTooLarge => formatter.write_str("embedded source exceeds the configured limit"),
-            Self::NestingTooDeep => formatter.write_str("embedded source nesting exceeds the configured limit"),
+            Self::SourceTooLarge => {
+                formatter.write_str("embedded source exceeds the configured limit")
+            }
+            Self::NestingTooDeep => {
+                formatter.write_str("embedded source nesting exceeds the configured limit")
+            }
             Self::EmbeddedDataNotFound => formatter.write_str("embedded data marker was not found"),
-            Self::InvalidEmbeddedData => formatter.write_str("embedded data is incomplete or invalid"),
+            Self::InvalidEmbeddedData => {
+                formatter.write_str("embedded data is incomplete or invalid")
+            }
         }
     }
 }

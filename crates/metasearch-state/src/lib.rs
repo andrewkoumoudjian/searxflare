@@ -34,7 +34,10 @@ pub struct KvEngineState {
 #[cfg(target_arch = "wasm32")]
 impl KvEngineState {
     pub fn new(kv: worker::kv::KvStore, prefix: impl Into<String>) -> Self {
-        Self { kv, prefix: prefix.into() }
+        Self {
+            kv,
+            prefix: prefix.into(),
+        }
     }
 
     fn key(&self, engine_id: &str, key: &str) -> String {
@@ -50,7 +53,9 @@ impl EngineState for KvEngineState {
             .get(&self.key(engine_id, key))
             .bytes()
             .await
-            .map_err(|error| EngineFailure::new(engine_id, FailureKind::Internal, error.to_string()))
+            .map_err(|error| {
+                EngineFailure::new(engine_id, FailureKind::Internal, error.to_string())
+            })
     }
 
     async fn put(
@@ -63,27 +68,43 @@ impl EngineState for KvEngineState {
         let builder = self
             .kv
             .put_bytes(&self.key(engine_id, key), value)
-            .map_err(|error| EngineFailure::new(engine_id, FailureKind::Internal, error.to_string()))?;
-        let builder = if let Some(ttl) = ttl_seconds { builder.expiration_ttl(ttl) } else { builder };
-        builder
-            .execute()
-            .await
-            .map_err(|error| EngineFailure::new(engine_id, FailureKind::Internal, error.to_string()))
+            .map_err(|error| {
+                EngineFailure::new(engine_id, FailureKind::Internal, error.to_string())
+            })?;
+        let builder = if let Some(ttl) = ttl_seconds {
+            builder.expiration_ttl(ttl)
+        } else {
+            builder
+        };
+        builder.execute().await.map_err(|error| {
+            EngineFailure::new(engine_id, FailureKind::Internal, error.to_string())
+        })
     }
 
     async fn delete(&self, engine_id: &str, key: &str) -> Result<(), EngineFailure> {
         self.kv
             .delete(&self.key(engine_id, key))
             .await
-            .map_err(|error| EngineFailure::new(engine_id, FailureKind::Internal, error.to_string()))
+            .map_err(|error| {
+                EngineFailure::new(engine_id, FailureKind::Internal, error.to_string())
+            })
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum CoordinatorCommand {
-    AcquireRefreshLease { now_ms: u64, lease_ms: u32 },
-    RecordSuccess { now_ms: u64 },
-    RecordFailure { now_ms: u64, failure_kind: String, cooldown_ms: u32 },
+    AcquireRefreshLease {
+        now_ms: u64,
+        lease_ms: u32,
+    },
+    RecordSuccess {
+        now_ms: u64,
+    },
+    RecordFailure {
+        now_ms: u64,
+        failure_kind: String,
+        cooldown_ms: u32,
+    },
     Snapshot,
 }
 

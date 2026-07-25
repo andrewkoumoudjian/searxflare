@@ -17,8 +17,19 @@ pub static DESCRIPTOR: EngineDescriptor = EngineDescriptor {
     categories: &["reference"],
     source_kind: SourceKind::Html,
     maturity: EngineMaturity::Beta,
-    allowed_hosts: &["en.wikipedia.org", "fr.wikipedia.org", "de.wikipedia.org", "es.wikipedia.org"],
-    capabilities: EngineCapabilities { paging: true, locale: true, country: false, safe_search: false, time_range: false },
+    allowed_hosts: &[
+        "en.wikipedia.org",
+        "fr.wikipedia.org",
+        "de.wikipedia.org",
+        "es.wikipedia.org",
+    ],
+    capabilities: EngineCapabilities {
+        paging: true,
+        locale: true,
+        country: false,
+        safe_search: false,
+        time_range: false,
+    },
     timeout_ms: HTML_ENGINE_TIMEOUT_MS,
     max_body_bytes: DEFAULT_MAX_BODY_BYTES,
     max_steps: DEFAULT_MAX_STEPS,
@@ -28,7 +39,10 @@ pub static DESCRIPTOR: EngineDescriptor = EngineDescriptor {
     default_enabled: true,
     allow_http: false,
     state_policy: StatePolicy::Stateless,
-    cache_policy: CachePolicy { response_ttl_seconds: 1_800, negative_ttl_seconds: 30 },
+    cache_policy: CachePolicy {
+        response_ttl_seconds: 1_800,
+        negative_ttl_seconds: 30,
+    },
     bot_auth_policy: BotAuthPolicy::Disabled,
 };
 
@@ -55,7 +69,9 @@ fn language_host(locale: Option<&str>) -> &'static str {
 
 #[async_trait::async_trait(?Send)]
 impl SearchEngine for WikipediaEngine {
-    fn descriptor(&self) -> &'static EngineDescriptor { &DESCRIPTOR }
+    fn descriptor(&self) -> &'static EngineDescriptor {
+        &DESCRIPTOR
+    }
 
     async fn search(
         &self,
@@ -63,8 +79,9 @@ impl SearchEngine for WikipediaEngine {
         context: &EngineContext<'_>,
     ) -> Result<EngineOutput, EngineFailure> {
         let host = language_host(query.locale.as_deref());
-        let mut url = Url::parse(&format!("https://{host}/w/index.php"))
-            .map_err(|error| EngineFailure::new(DESCRIPTOR.id, FailureKind::Internal, error.to_string()))?;
+        let mut url = Url::parse(&format!("https://{host}/w/index.php")).map_err(|error| {
+            EngineFailure::new(DESCRIPTOR.id, FailureKind::Internal, error.to_string())
+        })?;
         let offset = query.page_number().saturating_sub(1).saturating_mul(10);
         url.query_pairs_mut()
             .append_pair("search", &query.text)
@@ -77,17 +94,38 @@ impl SearchEngine for WikipediaEngine {
             method: EngineMethod::Get,
             url: url.clone(),
             headers: BTreeMap::from([
-                ("accept".into(), "text/html,application/xhtml+xml;q=0.9".into()),
-                ("accept-language".into(), query.locale.clone().unwrap_or_else(|| "en-US,en;q=0.8".into())),
-                ("user-agent".into(), "searxflare/0.1 (+https://github.com/andrewkoumoudjian/searxflare)".into()),
+                (
+                    "accept".into(),
+                    "text/html,application/xhtml+xml;q=0.9".into(),
+                ),
+                (
+                    "accept-language".into(),
+                    query
+                        .locale
+                        .clone()
+                        .unwrap_or_else(|| "en-US,en;q=0.8".into()),
+                ),
+                (
+                    "user-agent".into(),
+                    "searxflare/0.1 (+https://github.com/andrewkoumoudjian/searxflare)".into(),
+                ),
             ]),
             cookies: BTreeMap::new(),
             body: None,
             accepted_content_types: &["text/html", "application/xhtml+xml"],
         };
-        let response = context.http.send(&DESCRIPTOR, request, context.deadline).await?;
-        let parsed = parse_selector_results(&response.body, &url, &SELECTORS, 10)
-            .map_err(|error| EngineFailure::new(DESCRIPTOR.id, FailureKind::EngineParseFailed, error.to_string()))?;
+        let response = context
+            .http
+            .send(&DESCRIPTOR, request, context.deadline)
+            .await?;
+        let parsed =
+            parse_selector_results(&response.body, &url, &SELECTORS, 10).map_err(|error| {
+                EngineFailure::new(
+                    DESCRIPTOR.id,
+                    FailureKind::EngineParseFailed,
+                    error.to_string(),
+                )
+            })?;
         let results = parsed
             .into_iter()
             .enumerate()

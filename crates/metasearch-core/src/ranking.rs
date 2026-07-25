@@ -12,7 +12,9 @@ impl Display for RankingError {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::InvalidPosition => formatter.write_str("provider positions must be positive"),
-            Self::InvalidWeight => formatter.write_str("engine weights must be finite and non-negative"),
+            Self::InvalidWeight => {
+                formatter.write_str("engine weights must be finite and non-negative")
+            }
         }
     }
 }
@@ -90,7 +92,10 @@ mod tests {
             thumbnail: None,
             category: "general".into(),
             metadata: Map::new(),
-            engines: positions.iter().map(|(id, _, _)| (*id).to_owned()).collect(),
+            engines: positions
+                .iter()
+                .map(|(id, _, _)| (*id).to_owned())
+                .collect(),
             positions: positions
                 .iter()
                 .map(|(id, position, _)| ((*id).to_owned(), *position))
@@ -112,7 +117,10 @@ mod tests {
         let ranked = rank_results(
             vec![
                 result("https://single.example/", &[("a", 1, 1.0)]),
-                result("https://consensus.example/", &[("a", 3, 1.0), ("b", 4, 1.0)]),
+                result(
+                    "https://consensus.example/",
+                    &[("a", 3, 1.0), ("b", 4, 1.0)],
+                ),
             ],
             RankingStrategy::RrfV1,
         )
@@ -136,7 +144,10 @@ mod tests {
     #[test]
     fn searx_compat_matches_documented_formula() {
         let ranked = rank_results(
-            vec![result("https://example.com/", &[("a", 1, 2.0), ("b", 2, 0.5)])],
+            vec![result(
+                "https://example.com/",
+                &[("a", 1, 2.0), ("b", 2, 0.5)],
+            )],
             RankingStrategy::SearxCompatV1,
         )
         .unwrap();

@@ -75,70 +75,83 @@ pub fn parse_selector_results(
     {
         let builders = Rc::clone(&builders);
         let current = Rc::clone(&current);
-        settings = settings.append_element_content_handler(text!(descendant(spec.item, spec.title), move |chunk| {
-            if let Some(index) = current.get() {
-                if let Some(builder) = builders.borrow_mut().get_mut(index) {
-                    builder.title.push_str(chunk.as_str());
+        settings = settings.append_element_content_handler(text!(
+            descendant(spec.item, spec.title),
+            move |chunk| {
+                if let Some(index) = current.get() {
+                    if let Some(builder) = builders.borrow_mut().get_mut(index) {
+                        builder.title.push_str(chunk.as_str());
+                    }
                 }
+                Ok(())
             }
-            Ok(())
-        }));
+        ));
     }
 
     {
         let builders = Rc::clone(&builders);
         let current = Rc::clone(&current);
-        settings = settings.append_element_content_handler(element!(descendant(spec.item, spec.url), move |element| {
-            if let Some(index) = current.get() {
-                if let Some(builder) = builders.borrow_mut().get_mut(index) {
-                    if builder.url.is_empty() {
-                        builder.url = element
-                            .get_attribute("href")
-                            .or_else(|| element.get_attribute("data-href"))
-                            .unwrap_or_default();
+        settings = settings.append_element_content_handler(element!(
+            descendant(spec.item, spec.url),
+            move |element| {
+                if let Some(index) = current.get() {
+                    if let Some(builder) = builders.borrow_mut().get_mut(index) {
+                        if builder.url.is_empty() {
+                            builder.url = element
+                                .get_attribute("href")
+                                .or_else(|| element.get_attribute("data-href"))
+                                .unwrap_or_default();
+                        }
                     }
                 }
+                Ok(())
             }
-            Ok(())
-        }));
+        ));
     }
 
     if let Some(description_selector) = spec.description {
         let builders = Rc::clone(&builders);
         let current = Rc::clone(&current);
-        settings = settings.append_element_content_handler(text!(descendant(spec.item, description_selector), move |chunk| {
-            if let Some(index) = current.get() {
-                if let Some(builder) = builders.borrow_mut().get_mut(index) {
-                    builder.description.push_str(chunk.as_str());
+        settings = settings.append_element_content_handler(text!(
+            descendant(spec.item, description_selector),
+            move |chunk| {
+                if let Some(index) = current.get() {
+                    if let Some(builder) = builders.borrow_mut().get_mut(index) {
+                        builder.description.push_str(chunk.as_str());
+                    }
                 }
+                Ok(())
             }
-            Ok(())
-        }));
+        ));
     }
 
     if let Some(thumbnail_selector) = spec.thumbnail {
         let builders = Rc::clone(&builders);
         let current = Rc::clone(&current);
-        settings = settings.append_element_content_handler(element!(descendant(spec.item, thumbnail_selector), move |element| {
-            if let Some(index) = current.get() {
-                if let Some(builder) = builders.borrow_mut().get_mut(index) {
-                    if builder.thumbnail.is_none() {
-                        builder.thumbnail = element
-                            .get_attribute("src")
-                            .or_else(|| element.get_attribute("data-src"));
+        settings = settings.append_element_content_handler(element!(
+            descendant(spec.item, thumbnail_selector),
+            move |element| {
+                if let Some(index) = current.get() {
+                    if let Some(builder) = builders.borrow_mut().get_mut(index) {
+                        if builder.thumbnail.is_none() {
+                            builder.thumbnail = element
+                                .get_attribute("src")
+                                .or_else(|| element.get_attribute("data-src"));
+                        }
                     }
                 }
+                Ok(())
             }
-            Ok(())
-        }));
+        ));
     }
 
     if let Some(no_results_selector) = spec.no_results {
         let no_results = Rc::clone(&no_results);
-        settings = settings.append_element_content_handler(element!(no_results_selector, move |_| {
-            no_results.set(true);
-            Ok(())
-        }));
+        settings =
+            settings.append_element_content_handler(element!(no_results_selector, move |_| {
+                no_results.set(true);
+                Ok(())
+            }));
     }
 
     let mut output = Vec::new();
@@ -215,7 +228,10 @@ mod tests {
         .unwrap();
         assert_eq!(results[0].title, "A result");
         assert_eq!(results[0].url, "https://example.com/item?a=1");
-        assert_eq!(results[0].description.as_deref(), Some("Useful description"));
+        assert_eq!(
+            results[0].description.as_deref(),
+            Some("Useful description")
+        );
     }
 
     #[test]
