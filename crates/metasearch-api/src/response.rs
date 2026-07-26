@@ -6,11 +6,11 @@ pub struct SearchResponse {
     pub request_id: String,
     pub query: String,
     pub provider_query: String,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[serde(default)]
     pub bangs: Vec<String>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[serde(default)]
     pub resolved_categories: Vec<String>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[serde(default)]
     pub resolved_engines: Vec<String>,
     pub ranking: RankingStrategy,
     pub partial: bool,
