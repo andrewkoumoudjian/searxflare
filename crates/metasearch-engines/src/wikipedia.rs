@@ -264,10 +264,7 @@ mod tests {
         assert_eq!(request.url.host_str(), Some("fr.wikipedia.org"));
         assert_eq!(request.url.path(), "/w/api.php");
         assert_eq!(parameters.get("generator").map(String::as_str), Some("search"));
-        assert_eq!(
-            parameters.get("gsrsearch").map(String::as_str),
-            Some("cloudflare rust")
-        );
+        assert_eq!(parameters.get("gsrsearch").map(String::as_str), Some("cloudflare rust"));
         assert_eq!(parameters.get("gsroffset").map(String::as_str), Some("10"));
     }
 
@@ -291,9 +288,7 @@ mod tests {
         assert_eq!(results[0].title, "Cloudflare");
         assert_eq!(results[0].metadata.get("page_id"), Some(&json!(42)));
 
-        assert!(parse_results(br#"{"batchcomplete":true}"#)
-            .unwrap()
-            .is_empty());
+        assert!(parse_results(br#"{"batchcomplete":true}"#).unwrap().is_empty());
         assert_eq!(
             parse_results(br#"{"error":{"code":"maxlag","info":"Waiting for hosts"}}"#)
                 .unwrap_err()
