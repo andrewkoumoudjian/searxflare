@@ -1,7 +1,9 @@
 use crate::{
-    arxiv::ArxivEngine, brave::BraveEngine, crossref::CrossrefEngine,
-    duckduckgo_html::DuckDuckGoHtmlEngine, github::GitHubEngine, pubmed::PubMedEngine,
+    arxiv::ArxivEngine, baidu::BaiduEngine, brave::BraveEngine, crossref::CrossrefEngine,
+    duckduckgo_html::DuckDuckGoHtmlEngine, github::GitHubEngine, google::GoogleEngine,
+    grokipedia::GrokipediaEngine, mojeek::MojeekEngine, pubmed::PubMedEngine,
     qwant::QwantEngine, semantic_scholar::SemanticScholarEngine, wikipedia::WikipediaEngine,
+    yahoo::YahooEngine, yandex::YandexEngine,
 };
 use metasearch_core::{
     EngineContext, EngineDescriptor, EngineFailure, EngineOutput, NormalizedQuery, SearchEngine,
@@ -18,6 +20,12 @@ pub enum RegisteredEngine {
     SemanticScholar,
     Crossref,
     GitHub,
+    Mojeek,
+    Yahoo,
+    Yandex,
+    Baidu,
+    Google,
+    Grokipedia,
 }
 
 #[async_trait::async_trait(?Send)]
@@ -33,6 +41,12 @@ impl SearchEngine for RegisteredEngine {
             Self::SemanticScholar => SemanticScholarEngine.descriptor(),
             Self::Crossref => CrossrefEngine.descriptor(),
             Self::GitHub => GitHubEngine.descriptor(),
+            Self::Mojeek => MojeekEngine.descriptor(),
+            Self::Yahoo => YahooEngine.descriptor(),
+            Self::Yandex => YandexEngine.descriptor(),
+            Self::Baidu => BaiduEngine.descriptor(),
+            Self::Google => GoogleEngine.descriptor(),
+            Self::Grokipedia => GrokipediaEngine.descriptor(),
         }
     }
 
@@ -51,11 +65,17 @@ impl SearchEngine for RegisteredEngine {
             Self::SemanticScholar => SemanticScholarEngine.search(query, context).await,
             Self::Crossref => CrossrefEngine.search(query, context).await,
             Self::GitHub => GitHubEngine.search(query, context).await,
+            Self::Mojeek => MojeekEngine.search(query, context).await,
+            Self::Yahoo => YahooEngine.search(query, context).await,
+            Self::Yandex => YandexEngine.search(query, context).await,
+            Self::Baidu => BaiduEngine.search(query, context).await,
+            Self::Google => GoogleEngine.search(query, context).await,
+            Self::Grokipedia => GrokipediaEngine.search(query, context).await,
         }
     }
 }
 
-static REGISTRY: [RegisteredEngine; 9] = [
+static REGISTRY: [RegisteredEngine; 15] = [
     RegisteredEngine::Arxiv,
     RegisteredEngine::Wikipedia,
     RegisteredEngine::DuckDuckGoHtml,
@@ -65,6 +85,12 @@ static REGISTRY: [RegisteredEngine; 9] = [
     RegisteredEngine::SemanticScholar,
     RegisteredEngine::Crossref,
     RegisteredEngine::GitHub,
+    RegisteredEngine::Mojeek,
+    RegisteredEngine::Yahoo,
+    RegisteredEngine::Yandex,
+    RegisteredEngine::Baidu,
+    RegisteredEngine::Google,
+    RegisteredEngine::Grokipedia,
 ];
 
 pub fn registry() -> &'static [RegisteredEngine] {
