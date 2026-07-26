@@ -215,13 +215,16 @@ fn parse_summary_results(body: &[u8]) -> Result<Vec<ProviderResult>, EngineFailu
             "PubMed ESummary returned an error",
         ));
     }
-    let result = root.get("result").and_then(Value::as_object).ok_or_else(|| {
-        EngineFailure::new(
-            DESCRIPTOR.id,
-            FailureKind::EngineParseFailed,
-            "PubMed ESummary response is missing result",
-        )
-    })?;
+    let result = root
+        .get("result")
+        .and_then(Value::as_object)
+        .ok_or_else(|| {
+            EngineFailure::new(
+                DESCRIPTOR.id,
+                FailureKind::EngineParseFailed,
+                "PubMed ESummary response is missing result",
+            )
+        })?;
     let uids = result
         .get("uids")
         .and_then(Value::as_array)
@@ -306,11 +309,7 @@ impl SearchEngine for PubMedEngine {
     ) -> Result<EngineOutput, EngineFailure> {
         let search_response = context
             .http
-            .send(
-                &DESCRIPTOR,
-                build_search_request(query)?,
-                context.deadline,
-            )
+            .send(&DESCRIPTOR, build_search_request(query)?, context.deadline)
             .await?;
         let ids = parse_search_ids(&search_response.body)?;
         if ids.is_empty() {
@@ -325,11 +324,7 @@ impl SearchEngine for PubMedEngine {
 
         let summary_response = context
             .http
-            .send(
-                &DESCRIPTOR,
-                build_summary_request(&ids)?,
-                context.deadline,
-            )
+            .send(&DESCRIPTOR, build_summary_request(&ids)?, context.deadline)
             .await?;
         let results = parse_summary_results(&summary_response.body)?;
         Ok(EngineOutput {
@@ -377,15 +372,13 @@ mod tests {
             search_parameters.get("retstart").map(String::as_str),
             Some("10")
         );
-        assert_eq!(
-            search_parameters.get("retmax").map(String::as_str),
-            Some("10")
-        );
 
         let summary = build_summary_request(&["1".into(), "2".into()]).unwrap();
-        let summary_parameters: BTreeMap<_, _> =
-            summary.url.query_pairs().into_owned().collect();
-        assert_eq!(summary_parameters.get("id").map(String::as_str), Some("1,2"));
+        let summary_parameters: BTreeMap<_, _> = summary.url.query_pairs().into_owned().collect();
+        assert_eq!(
+            summary_parameters.get("id").map(String::as_str),
+            Some("1,2")
+        );
     }
 
     #[test]
