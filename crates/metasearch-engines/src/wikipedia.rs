@@ -144,13 +144,16 @@ fn parse_results(body: &[u8]) -> Result<Vec<ProviderResult>, EngineFailure> {
     let Some(query) = root.get("query") else {
         return Ok(Vec::new());
     };
-    let pages = query.get("pages").and_then(Value::as_array).ok_or_else(|| {
-        EngineFailure::new(
-            DESCRIPTOR.id,
-            FailureKind::EngineParseFailed,
-            "Wikipedia response is missing query.pages",
-        )
-    })?;
+    let pages = query
+        .get("pages")
+        .and_then(Value::as_array)
+        .ok_or_else(|| {
+            EngineFailure::new(
+                DESCRIPTOR.id,
+                FailureKind::EngineParseFailed,
+                "Wikipedia response is missing query.pages",
+            )
+        })?;
 
     let mut results = Vec::new();
     for page in pages {
@@ -263,8 +266,14 @@ mod tests {
         let parameters: BTreeMap<_, _> = request.url.query_pairs().into_owned().collect();
         assert_eq!(request.url.host_str(), Some("fr.wikipedia.org"));
         assert_eq!(request.url.path(), "/w/api.php");
-        assert_eq!(parameters.get("generator").map(String::as_str), Some("search"));
-        assert_eq!(parameters.get("gsrsearch").map(String::as_str), Some("cloudflare rust"));
+        assert_eq!(
+            parameters.get("generator").map(String::as_str),
+            Some("search")
+        );
+        assert_eq!(
+            parameters.get("gsrsearch").map(String::as_str),
+            Some("cloudflare rust")
+        );
         assert_eq!(parameters.get("gsroffset").map(String::as_str), Some("10"));
     }
 
@@ -288,7 +297,9 @@ mod tests {
         assert_eq!(results[0].title, "Cloudflare");
         assert_eq!(results[0].metadata.get("page_id"), Some(&json!(42)));
 
-        assert!(parse_results(br#"{"batchcomplete":true}"#).unwrap().is_empty());
+        assert!(parse_results(br#"{"batchcomplete":true}"#)
+            .unwrap()
+            .is_empty());
         assert_eq!(
             parse_results(br#"{"error":{"code":"maxlag","info":"Waiting for hosts"}}"#)
                 .unwrap_err()
