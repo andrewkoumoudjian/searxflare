@@ -145,6 +145,21 @@ const GITHUB = JSON.stringify({
   ]
 });
 
+const MOJEEK = `<!doctype html><html><body>
+<ul class="results-standard"><li>
+  <h2><a href="https://example.com/mojeek">Mojeek result</a></h2>
+  <a class="ob" href="https://example.com/mojeek">example.com/mojeek</a>
+  <p class="s">Independent web search result.</p>
+</li></ul>
+</body></html>`;
+
+const YAHOO = `<!doctype html><html><body>
+<div class="algo-sr">
+  <div class="compTitle"><a href="https://r.search.yahoo.com/_ylt=x/RU=https%3A%2F%2Fexample.com%2Fyahoo/RK=2/RS=x"><h3><span>Yahoo result</span></h3></a></div>
+  <div class="compText">Yahoo web search result.</div>
+</div>
+</body></html>`;
+
 function mockProviders({ duckFailure = false, delayArxiv = false, emptyWikipedia = false } = {}) {
   const mock = vi.fn(async (input, init) => {
     const request = input instanceof Request ? input : new Request(input, init);
@@ -188,6 +203,12 @@ function mockProviders({ duckFailure = false, delayArxiv = false, emptyWikipedia
     if (url.hostname === "api.github.com") {
       return new Response(GITHUB, { status: 200, headers: { "content-type": "application/json; charset=utf-8" } });
     }
+    if (url.hostname === "www.mojeek.com") {
+      return new Response(MOJEEK, { status: 200, headers: { "content-type": "text/html; charset=UTF-8" } });
+    }
+    if (url.hostname === "search.yahoo.com" || url.hostname.endsWith(".search.yahoo.com")) {
+      return new Response(YAHOO, { status: 200, headers: { "content-type": "text/html; charset=UTF-8" } });
+    }
     throw new Error(`unexpected outbound request: ${request.url}`);
   });
   vi.stubGlobal("fetch", mock);
@@ -227,7 +248,9 @@ describe("Worker routes", () => {
       "pubmed",
       "semantic-scholar",
       "crossref",
-      "github"
+      "github",
+      "mojeek-web",
+      "yahoo-web"
     ]);
   });
 
@@ -325,6 +348,31 @@ describe("Worker routes", () => {
       "brave-web",
       "qwant-web"
     ]));
+  });
+
+  it("aggregates Mojeek, Yahoo and hardened Qwant requests", async () => {
+    const mock = mockProviders();
+    const response = await exports.default.fetch(new Request(
+      "https://example.com/v1/search?q=cloudflare&page=2&limit=7&engines=mojeek-web,yahoo-web,qwant-web",
+      { headers: AUTH }
+    ));
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.partial).toBe(false);
+    expect(body.results.flatMap((result) => result.engines)).toEqual(expect.arrayContaining([
+      "mojeek-web",
+      "yahoo-web",
+      "qwant-web"
+    ]));
+
+    const requests = mock.mock.calls.map(([input, init]) => input instanceof Request ? input : new Request(input, init));
+    const mojeek = new URL(requests.find((request) => new URL(request.url).hostname === "www.mojeek.com").url);
+    const yahoo = new URL(requests.find((request) => new URL(request.url).hostname.endsWith("search.yahoo.com")).url);
+    const qwant = new URL(requests.find((request) => new URL(request.url).hostname === "api.qwant.com").url);
+    expect(mojeek.searchParams.get("s")).toBe("10");
+    expect(yahoo.searchParams.get("b")).toBe("15");
+    expect(qwant.searchParams.get("count")).toBe("7");
+    expect(qwant.searchParams.get("offset")).toBe("7");
   });
 
   it("aggregates explicit academic providers", async () => {
