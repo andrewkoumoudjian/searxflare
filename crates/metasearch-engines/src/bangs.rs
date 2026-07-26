@@ -62,6 +62,22 @@ const BANG_REGISTRY: &[BangSpec] = &[
         target: BangTarget::Engine("qwant-web"),
     },
     BangSpec {
+        alias: "mojeek",
+        target: BangTarget::Engine("mojeek-web"),
+    },
+    BangSpec {
+        alias: "mj",
+        target: BangTarget::Engine("mojeek-web"),
+    },
+    BangSpec {
+        alias: "yahoo",
+        target: BangTarget::Engine("yahoo-web"),
+    },
+    BangSpec {
+        alias: "yh",
+        target: BangTarget::Engine("yahoo-web"),
+    },
+    BangSpec {
         alias: "pubmed",
         target: BangTarget::Engine("pubmed"),
     },
@@ -211,6 +227,10 @@ mod tests {
 
         let books = resolve_bangs("!books food safety").unwrap();
         assert_eq!(books.engines, vec!["crossref"]);
+
+        let providers = resolve_bangs("!mj !yh independent search").unwrap();
+        assert_eq!(providers.provider_query, "independent search");
+        assert_eq!(providers.engines, vec!["mojeek-web", "yahoo-web"]);
     }
 
     #[test]
