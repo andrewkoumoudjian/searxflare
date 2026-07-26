@@ -29,7 +29,7 @@ pub static DESCRIPTOR: EngineDescriptor = EngineDescriptor {
     max_steps: DEFAULT_MAX_STEPS,
     max_redirects: DEFAULT_MAX_REDIRECTS,
     weight: 1.05,
-    parser_version: "qwant-web-json-v1",
+    parser_version: "qwant-web-json-v2",
     default_enabled: false,
     allow_http: false,
     state_policy: StatePolicy::Stateless,
@@ -77,7 +77,7 @@ fn build_request(query: &NormalizedQuery) -> Result<EngineRequest, EngineFailure
         ));
     }
 
-    let count = 10_u32;
+    let count = u32::from(query.limit);
     let offset = page.saturating_sub(1).saturating_mul(count);
     let mut url = Url::parse("https://api.qwant.com/v3/search/web").map_err(|error| {
         EngineFailure::new(DESCRIPTOR.id, FailureKind::Internal, error.to_string())
@@ -280,12 +280,12 @@ mod tests {
             categories: Vec::new(),
             page: Some(2),
             cursor: None,
-            limit: 10,
+            limit: 7,
             locale: Some("fr-CA".into()),
             country: None,
             safe_search: SafeSearch::Moderate,
             time_range: None,
-            ranking: RankingStrategy::RrfV1,
+            ranking: RankingStrategy::QueryAwareV1,
             timeout_ms: 5_000,
         }
     }
@@ -294,8 +294,9 @@ mod tests {
     fn builds_reference_request_parameters() {
         let request = build_request(&query()).unwrap();
         let parameters: BTreeMap<_, _> = request.url.query_pairs().into_owned().collect();
+        assert_eq!(parameters.get("count").map(String::as_str), Some("7"));
         assert_eq!(parameters.get("locale").map(String::as_str), Some("fr_CA"));
-        assert_eq!(parameters.get("offset").map(String::as_str), Some("10"));
+        assert_eq!(parameters.get("offset").map(String::as_str), Some("7"));
         assert_eq!(parameters.get("safesearch").map(String::as_str), Some("1"));
         assert_eq!(
             request.headers.get("origin").map(String::as_str),
