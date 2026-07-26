@@ -1,7 +1,7 @@
 use crate::{
     arxiv::ArxivEngine, brave::BraveEngine, crossref::CrossrefEngine,
-    duckduckgo_html::DuckDuckGoHtmlEngine, pubmed::PubMedEngine, qwant::QwantEngine,
-    semantic_scholar::SemanticScholarEngine, wikipedia::WikipediaEngine,
+    duckduckgo_html::DuckDuckGoHtmlEngine, github::GitHubEngine, pubmed::PubMedEngine,
+    qwant::QwantEngine, semantic_scholar::SemanticScholarEngine, wikipedia::WikipediaEngine,
 };
 use metasearch_core::{
     EngineContext, EngineDescriptor, EngineFailure, EngineOutput, NormalizedQuery, SearchEngine,
@@ -17,6 +17,7 @@ pub enum RegisteredEngine {
     PubMed,
     SemanticScholar,
     Crossref,
+    GitHub,
 }
 
 #[async_trait::async_trait(?Send)]
@@ -31,6 +32,7 @@ impl SearchEngine for RegisteredEngine {
             Self::PubMed => PubMedEngine.descriptor(),
             Self::SemanticScholar => SemanticScholarEngine.descriptor(),
             Self::Crossref => CrossrefEngine.descriptor(),
+            Self::GitHub => GitHubEngine.descriptor(),
         }
     }
 
@@ -48,11 +50,12 @@ impl SearchEngine for RegisteredEngine {
             Self::PubMed => PubMedEngine.search(query, context).await,
             Self::SemanticScholar => SemanticScholarEngine.search(query, context).await,
             Self::Crossref => CrossrefEngine.search(query, context).await,
+            Self::GitHub => GitHubEngine.search(query, context).await,
         }
     }
 }
 
-static REGISTRY: [RegisteredEngine; 8] = [
+static REGISTRY: [RegisteredEngine; 9] = [
     RegisteredEngine::Arxiv,
     RegisteredEngine::Wikipedia,
     RegisteredEngine::DuckDuckGoHtml,
@@ -61,6 +64,7 @@ static REGISTRY: [RegisteredEngine; 8] = [
     RegisteredEngine::PubMed,
     RegisteredEngine::SemanticScholar,
     RegisteredEngine::Crossref,
+    RegisteredEngine::GitHub,
 ];
 
 pub fn registry() -> &'static [RegisteredEngine] {
