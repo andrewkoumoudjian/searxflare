@@ -84,7 +84,9 @@ pub fn parse_arxiv_atom(xml: &[u8]) -> Result<Vec<ArxivRecord>, ParserError> {
         }
 
         let published_at = entry.published.or(entry.updated).ok_or_else(|| {
-            ParserError::InvalidXml("arXiv entry is missing published and updated timestamps".into())
+            ParserError::InvalidXml(
+                "arXiv entry is missing published and updated timestamps".into(),
+            )
         })?;
         let pdf_url = entry
             .links
