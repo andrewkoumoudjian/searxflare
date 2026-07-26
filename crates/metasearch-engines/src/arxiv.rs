@@ -131,7 +131,10 @@ impl SearchEngine for ArxivEngine {
                 metadata.insert("authors".into(), json!(record.authors));
                 metadata.insert("pdf_url".into(), json!(record.pdf_url));
                 metadata.insert("doi".into(), json!(record.doi));
-                metadata.insert("journal_reference".into(), json!(record.journal_reference));
+                metadata.insert(
+                    "journal_reference".into(),
+                    json!(record.journal_reference),
+                );
                 metadata.insert("categories".into(), json!(record.categories));
                 metadata.insert("comments".into(), json!(record.comments));
                 ProviderResult {
