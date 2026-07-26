@@ -1,7 +1,8 @@
 use crate::{
     arxiv::ArxivEngine, brave::BraveEngine, crossref::CrossrefEngine,
-    duckduckgo_html::DuckDuckGoHtmlEngine, github::GitHubEngine, pubmed::PubMedEngine,
-    qwant::QwantEngine, semantic_scholar::SemanticScholarEngine, wikipedia::WikipediaEngine,
+    duckduckgo_html::DuckDuckGoHtmlEngine, github::GitHubEngine, mojeek::MojeekEngine,
+    pubmed::PubMedEngine, qwant::QwantEngine, semantic_scholar::SemanticScholarEngine,
+    wikipedia::WikipediaEngine, yahoo::YahooEngine,
 };
 use metasearch_core::{
     EngineContext, EngineDescriptor, EngineFailure, EngineOutput, NormalizedQuery, SearchEngine,
@@ -18,6 +19,8 @@ pub enum RegisteredEngine {
     SemanticScholar,
     Crossref,
     GitHub,
+    Mojeek,
+    Yahoo,
 }
 
 #[async_trait::async_trait(?Send)]
@@ -33,6 +36,8 @@ impl SearchEngine for RegisteredEngine {
             Self::SemanticScholar => SemanticScholarEngine.descriptor(),
             Self::Crossref => CrossrefEngine.descriptor(),
             Self::GitHub => GitHubEngine.descriptor(),
+            Self::Mojeek => MojeekEngine.descriptor(),
+            Self::Yahoo => YahooEngine.descriptor(),
         }
     }
 
@@ -51,11 +56,13 @@ impl SearchEngine for RegisteredEngine {
             Self::SemanticScholar => SemanticScholarEngine.search(query, context).await,
             Self::Crossref => CrossrefEngine.search(query, context).await,
             Self::GitHub => GitHubEngine.search(query, context).await,
+            Self::Mojeek => MojeekEngine.search(query, context).await,
+            Self::Yahoo => YahooEngine.search(query, context).await,
         }
     }
 }
 
-static REGISTRY: [RegisteredEngine; 9] = [
+static REGISTRY: [RegisteredEngine; 11] = [
     RegisteredEngine::Arxiv,
     RegisteredEngine::Wikipedia,
     RegisteredEngine::DuckDuckGoHtml,
@@ -65,6 +72,8 @@ static REGISTRY: [RegisteredEngine; 9] = [
     RegisteredEngine::SemanticScholar,
     RegisteredEngine::Crossref,
     RegisteredEngine::GitHub,
+    RegisteredEngine::Mojeek,
+    RegisteredEngine::Yahoo,
 ];
 
 pub fn registry() -> &'static [RegisteredEngine] {
