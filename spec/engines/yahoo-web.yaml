@@ -1,0 +1,26 @@
+id: yahoo-web
+display_name: Yahoo Web
+endpoint: https://search.yahoo.com/search
+method: GET
+categories: [general]
+source_kind: html
+allowed_hosts: [search.yahoo.com, ca.search.yahoo.com, de.search.yahoo.com, fr.search.yahoo.com, uk.search.yahoo.com, br.search.yahoo.com, in.search.yahoo.com, espanol.search.yahoo.com, mx.search.yahoo.com, sg.search.yahoo.com, hk.search.yahoo.com, tw.search.yahoo.com]
+capabilities:
+  paging: true
+  locale: true
+  country: true
+  safe_search: true
+  time_range: true
+limits:
+  timeout_ms: 3500
+  max_body_bytes: 2097152
+  max_steps: 3
+  max_redirects: 2
+versions:
+  parser: yahoo-web-html-v1
+cache:
+  response_ttl_seconds: 180
+  negative_ttl_seconds: 30
+state: stateless
+default_enabled: false
+notes: Uses a compile-time regional host map, bounded paging, locale and safe-search cookies, day/week/month filters, tracking-URL unwrapping, streaming lol-html parsing, and explicit changed-layout detection. Default-disabled pending Cloudflare preview egress validation.
