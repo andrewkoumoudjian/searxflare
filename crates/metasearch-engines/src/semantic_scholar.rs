@@ -52,10 +52,7 @@ fn build_request(query: &NormalizedQuery) -> Result<EngineRequest, EngineFailure
     }
 
     let limit = u32::from(query.limit);
-    let offset = query
-        .page_number()
-        .saturating_sub(1)
-        .saturating_mul(limit);
+    let offset = query.page_number().saturating_sub(1).saturating_mul(limit);
     if offset.saturating_add(limit) > 1_000 {
         return Err(EngineFailure::new(
             DESCRIPTOR.id,
@@ -64,9 +61,10 @@ fn build_request(query: &NormalizedQuery) -> Result<EngineRequest, EngineFailure
         ));
     }
 
-    let mut url = Url::parse("https://api.semanticscholar.org/graph/v1/paper/search").map_err(
-        |error| EngineFailure::new(DESCRIPTOR.id, FailureKind::Internal, error.to_string()),
-    )?;
+    let mut url =
+        Url::parse("https://api.semanticscholar.org/graph/v1/paper/search").map_err(|error| {
+            EngineFailure::new(DESCRIPTOR.id, FailureKind::Internal, error.to_string())
+        })?;
     url.query_pairs_mut()
         .append_pair("query", &query.text.replace('-', " "))
         .append_pair("offset", &offset.to_string())
@@ -146,8 +144,7 @@ fn parse_results(body: &[u8]) -> Result<Vec<ProviderResult>, EngineFailure> {
             error.to_string(),
         )
     })?;
-    if root.get("error").is_some() || root.get("message").is_some() && root.get("data").is_none()
-    {
+    if root.get("error").is_some() || root.get("message").is_some() && root.get("data").is_none() {
         return Err(classify_api_error(&root));
     }
     let items = root.get("data").and_then(Value::as_array).ok_or_else(|| {
@@ -277,7 +274,10 @@ mod tests {
     fn builds_relevance_search_request() {
         let request = build_request(&query()).unwrap();
         let parameters: BTreeMap<_, _> = request.url.query_pairs().into_owned().collect();
-        assert_eq!(parameters.get("query").map(String::as_str), Some("cloudflare rust"));
+        assert_eq!(
+            parameters.get("query").map(String::as_str),
+            Some("cloudflare rust")
+        );
         assert_eq!(parameters.get("offset").map(String::as_str), Some("10"));
         assert_eq!(parameters.get("limit").map(String::as_str), Some("10"));
         assert!(parameters
