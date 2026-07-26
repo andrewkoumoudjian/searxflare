@@ -1,9 +1,10 @@
 # Known limitations
 
 - DuckDuckGo HTML supports only the first page; VQD continuation is out of scope.
-- Brave Web and Qwant Web use provider-controlled public frontend contracts rather than supported public APIs. Selector or schema changes may disable either engine until fixtures and parsers are updated.
-- Brave Web is capped at ten pages and Qwant Web at five pages. Qwant Web does not expose a stable time-range parameter.
+- Brave Web, Qwant Web, Mojeek Web and Yahoo Web use provider-controlled public frontend contracts rather than supported unauthenticated APIs. Selector or schema changes may disable an engine until fixtures and parsers are updated.
+- Brave Web, Mojeek Web and Yahoo Web are capped at ten pages; Qwant Web is capped at five. Qwant Web does not expose a stable time-range parameter, and Yahoo's stable adapter mapping supports day, week and month but not year.
 - Qwant DataDome cookie persistence is not implemented. Cloudflare preview egress was challenged during validation on 2026-07-25, so Qwant remains stateless and default-disabled. Explicit requests classify the challenge without bypassing it.
+- Mojeek and Yahoo are default-disabled until exact Cloudflare preview egress is validated. Mojeek's public HTML surface may return fewer results than the requested API limit, and Yahoo regional, language and SafeSearch controls remain provider-controlled.
 - PubMed, Semantic Scholar, Crossref and GitHub are default-disabled and must be selected explicitly. They use public provider capacity and can independently rate-limit or deny Worker egress.
 - GitHub repository search is unauthenticated in the current slice because provider-scoped secrets are not yet exposed to engines. It uses GitHub's separate public search rate-limit bucket and must not be enabled by default until Cloudflare preview egress and observed limits are validated.
 - PubMed uses a shared-deadline two-request ESearch-to-ESummary flow. The current result content uses summary and journal metadata rather than fetching full abstracts through a third request.
