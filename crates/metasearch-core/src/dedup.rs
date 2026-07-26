@@ -55,10 +55,7 @@ pub fn deduplicate(results: Vec<NormalizedResult>) -> Vec<NormalizedResult> {
                 existing.metadata.entry(key).or_insert(value);
             }
             for (engine, metadata) in result.provider_metadata {
-                existing
-                    .provider_metadata
-                    .entry(engine)
-                    .or_insert(metadata);
+                existing.provider_metadata.entry(engine).or_insert(metadata);
             }
             for (engine, position) in result.positions {
                 existing
@@ -82,7 +79,7 @@ pub fn deduplicate(results: Vec<NormalizedResult>) -> Vec<NormalizedResult> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_json::{json, Map, Value};
+    use serde_json::{json, Map};
 
     fn provider(engine: &str, title: &str, content: &str, position: u32) -> ProviderResult {
         ProviderResult {
