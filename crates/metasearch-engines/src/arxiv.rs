@@ -131,10 +131,7 @@ impl SearchEngine for ArxivEngine {
                 metadata.insert("authors".into(), json!(record.authors));
                 metadata.insert("pdf_url".into(), json!(record.pdf_url));
                 metadata.insert("doi".into(), json!(record.doi));
-                metadata.insert(
-                    "journal_reference".into(),
-                    json!(record.journal_reference),
-                );
+                metadata.insert("journal_reference".into(), json!(record.journal_reference));
                 metadata.insert("categories".into(), json!(record.categories));
                 metadata.insert("comments".into(), json!(record.comments));
                 ProviderResult {
@@ -192,9 +189,6 @@ mod tests {
             Some("all:\"cloudflare\" AND all:\"rust\"")
         );
         assert_eq!(parameters.get("start").map(String::as_str), Some("7"));
-        assert_eq!(
-            parameters.get("max_results").map(String::as_str),
-            Some("7")
-        );
+        assert_eq!(parameters.get("max_results").map(String::as_str), Some("7"));
     }
 }
