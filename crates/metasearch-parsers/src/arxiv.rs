@@ -28,7 +28,10 @@ struct Entry {
     title: String,
     id: String,
     summary: String,
-    published: String,
+    #[serde(default)]
+    published: Option<String>,
+    #[serde(default)]
+    updated: Option<String>,
     #[serde(rename = "author", default)]
     authors: Vec<Author>,
     #[serde(rename = "link", default)]
@@ -71,40 +74,50 @@ fn clean(value: &str) -> String {
 pub fn parse_arxiv_atom(xml: &[u8]) -> Result<Vec<ArxivRecord>, ParserError> {
     let feed: Feed = from_reader(Cursor::new(xml))
         .map_err(|error| ParserError::InvalidXml(error.to_string()))?;
-    Ok(feed
-        .entries
-        .into_iter()
-        .map(|entry| {
-            let pdf_url = entry
-                .links
-                .iter()
-                .find(|link| {
-                    link.title.as_deref() == Some("pdf")
-                        || link.content_type.as_deref() == Some("application/pdf")
-                })
-                .map(|link| link.href.clone());
-            ArxivRecord {
-                title: clean(&entry.title),
-                canonical_url: entry.id,
-                abstract_text: clean(&entry.summary),
-                authors: entry
-                    .authors
-                    .into_iter()
-                    .map(|author| clean(&author.name))
-                    .collect(),
-                pdf_url,
-                doi: entry.doi.map(|value| clean(&value)),
-                journal_reference: entry.journal_reference.map(|value| clean(&value)),
-                categories: entry
-                    .categories
-                    .into_iter()
-                    .map(|category| category.term)
-                    .collect(),
-                comments: entry.comments.map(|value| clean(&value)),
-                published_at: entry.published,
-            }
-        })
-        .collect())
+    let mut records = Vec::with_capacity(feed.entries.len());
+
+    for entry in feed.entries {
+        let title = clean(&entry.title);
+        let abstract_text = clean(&entry.summary);
+        if title.eq_ignore_ascii_case("error") || entry.id.contains("/api/errors#") {
+            return Err(ParserError::ProviderError(abstract_text));
+        }
+
+        let published_at = entry.published.or(entry.updated).ok_or_else(|| {
+            ParserError::InvalidXml("arXiv entry is missing published and updated timestamps".into())
+        })?;
+        let pdf_url = entry
+            .links
+            .iter()
+            .find(|link| {
+                link.title.as_deref() == Some("pdf")
+                    || link.content_type.as_deref() == Some("application/pdf")
+            })
+            .map(|link| link.href.clone());
+
+        records.push(ArxivRecord {
+            title,
+            canonical_url: entry.id,
+            abstract_text,
+            authors: entry
+                .authors
+                .into_iter()
+                .map(|author| clean(&author.name))
+                .collect(),
+            pdf_url,
+            doi: entry.doi.map(|value| clean(&value)),
+            journal_reference: entry.journal_reference.map(|value| clean(&value)),
+            categories: entry
+                .categories
+                .into_iter()
+                .map(|category| category.term)
+                .collect(),
+            comments: entry.comments.map(|value| clean(&value)),
+            published_at,
+        });
+    }
+
+    Ok(records)
 }
 
 #[cfg(test)]
@@ -132,5 +145,23 @@ mod tests {
         assert_eq!(records[0].authors, vec!["Ada Example"]);
         assert_eq!(records[0].doi.as_deref(), Some("10.1000/example"));
         assert_eq!(records[0].categories, vec!["cs.IR"]);
+    }
+
+    #[test]
+    fn surfaces_arxiv_error_entries() {
+        let xml = br#"<?xml version="1.0" encoding="UTF-8"?>
+        <feed xmlns="http://www.w3.org/2005/Atom">
+          <entry>
+            <id>http://arxiv.org/api/errors#malformed_query</id>
+            <title>Error</title>
+            <summary>Malformed query</summary>
+            <updated>2026-07-26T00:00:00Z</updated>
+            <author><name>arXiv api core</name></author>
+          </entry>
+        </feed>"#;
+        assert_eq!(
+            parse_arxiv_atom(xml).unwrap_err(),
+            ParserError::ProviderError("Malformed query".into())
+        );
     }
 }
