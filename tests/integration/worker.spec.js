@@ -119,6 +119,32 @@ const CROSSREF = JSON.stringify({
   }
 });
 
+const GITHUB = JSON.stringify({
+  total_count: 1,
+  incomplete_results: false,
+  items: [
+    {
+      id: 123456,
+      full_name: "cloudflare/workers-rs",
+      html_url: "https://github.com/cloudflare/workers-rs",
+      description: "Write Cloudflare Workers in Rust via WebAssembly.",
+      language: "Rust",
+      stargazers_count: 5000,
+      forks_count: 400,
+      open_issues_count: 80,
+      topics: ["cloudflare-workers", "rust", "wasm"],
+      updated_at: "2026-07-20T12:00:00Z",
+      clone_url: "https://github.com/cloudflare/workers-rs.git",
+      default_branch: "main",
+      owner: {
+        login: "cloudflare",
+        avatar_url: "https://avatars.githubusercontent.com/u/314135"
+      },
+      license: { spdx_id: "Apache-2.0" }
+    }
+  ]
+});
+
 function mockProviders({ duckFailure = false, delayArxiv = false, emptyWikipedia = false } = {}) {
   const mock = vi.fn(async (input, init) => {
     const request = input instanceof Request ? input : new Request(input, init);
@@ -159,6 +185,9 @@ function mockProviders({ duckFailure = false, delayArxiv = false, emptyWikipedia
     if (url.hostname === "api.crossref.org") {
       return new Response(CROSSREF, { status: 200, headers: { "content-type": "application/json" } });
     }
+    if (url.hostname === "api.github.com") {
+      return new Response(GITHUB, { status: 200, headers: { "content-type": "application/json; charset=utf-8" } });
+    }
     throw new Error(`unexpected outbound request: ${request.url}`);
   });
   vi.stubGlobal("fetch", mock);
@@ -197,7 +226,8 @@ describe("Worker routes", () => {
       "qwant-web",
       "pubmed",
       "semantic-scholar",
-      "crossref"
+      "crossref",
+      "github"
     ]);
   });
 
@@ -213,11 +243,72 @@ describe("Worker routes", () => {
     expect(response.status).toBe(200);
     const body = await response.json();
     expect(body.partial).toBe(true);
+    expect(body.ranking).toBe("query-aware-v1");
     expect(body.results.length).toBeGreaterThanOrEqual(3);
     expect(body.engines.some((engine) => engine.failure_kind === "ENGINE_CHALLENGED")).toBe(true);
     expect(body.engines.map((engine) => engine.engine_id)).not.toContain("qwant-web");
     expect(body.engines.map((engine) => engine.engine_id)).not.toContain("pubmed");
     expect(body.results.every((result) => result.canonical_url.startsWith("http"))).toBe(true);
+    expect(body.results.every((result) => Object.keys(result.provider_metadata).length >= 1)).toBe(true);
+  });
+
+  it("resolves category bangs before provider execution", async () => {
+    mockProviders();
+    const response = await exports.default.fetch(new Request(
+      "https://example.com/v1/search?q=!web+cloudflare+rust",
+      { headers: AUTH }
+    ));
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.query).toBe("!web cloudflare rust");
+    expect(body.provider_query).toBe("cloudflare rust");
+    expect(body.bangs).toEqual(["web"]);
+    expect(body.resolved_categories).toEqual(["general"]);
+    expect(body.resolved_engines).toEqual(expect.arrayContaining(["duckduckgo-html", "brave-web"]));
+    expect(body.resolved_engines).not.toContain("qwant-web");
+  });
+
+  it("supports compatible engine bangs and the GitHub alias", async () => {
+    const mock = mockProviders();
+    const response = await exports.default.fetch(new Request(
+      "https://example.com/v1/search?q=!gh+cloudflare+workers+rust",
+      { headers: AUTH }
+    ));
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.provider_query).toBe("cloudflare workers rust");
+    expect(body.bangs).toEqual(["gh"]);
+    expect(body.resolved_engines).toEqual(["github"]);
+    expect(body.results[0].title).toBe("cloudflare/workers-rs");
+    expect(body.results[0].provider_metadata.github.stars).toBe(5000);
+    const githubRequest = mock.mock.calls
+      .map(([input, init]) => input instanceof Request ? input : new Request(input, init))
+      .find((request) => new URL(request.url).hostname === "api.github.com");
+    expect(new URL(githubRequest.url).searchParams.get("q")).toBe("cloudflare workers rust");
+  });
+
+  it("rejects conflicting, unknown and bang-only queries", async () => {
+    for (const query of ["!web !arxiv cloudflare", "!unknown cloudflare", "!web"]) {
+      const response = await exports.default.fetch(new Request(
+        `https://example.com/v1/search?q=${encodeURIComponent(query)}`,
+        { headers: AUTH }
+      ));
+      expect(response.status).toBe(400);
+      expect((await response.json()).code).toBe("INVALID_REQUEST");
+    }
+  });
+
+  it("preserves escaped exclamation marks as literal query text", async () => {
+    mockProviders();
+    const response = await exports.default.fetch(new Request(
+      `https://example.com/v1/search?q=${encodeURIComponent("\\!gh cloudflare")}&engines=wikipedia`,
+      { headers: AUTH }
+    ));
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.bangs).toEqual([]);
+    expect(body.provider_query).toBe("!gh cloudflare");
+    expect(body.resolved_engines).toEqual(["wikipedia"]);
   });
 
   it("aggregates the independent general web providers", async () => {
@@ -270,12 +361,12 @@ describe("Worker routes", () => {
     expect((await response.json()).code).toBe("NO_ENGINE_SUCCEEDED");
   });
 
-  it("serves the SearXNG JSON compatibility subset", async () => {
+  it("serves the SearXNG JSON compatibility subset with bangs", async () => {
     mockProviders();
-    const response = await exports.default.fetch("https://example.com/search?q=rust&engines=wikipedia&format=json");
+    const response = await exports.default.fetch("https://example.com/search?q=!wp+rust&format=json");
     expect(response.status).toBe(200);
     const body = await response.json();
-    expect(body.query).toBe("rust");
+    expect(body.query).toBe("!wp rust");
     expect(body.number_of_results).toBe(1);
     expect(body.results[0].engines).toContain("wikipedia");
   });
