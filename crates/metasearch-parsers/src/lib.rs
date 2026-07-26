@@ -35,7 +35,9 @@ impl Display for ParserError {
             Self::NestingTooDeep => {
                 formatter.write_str("embedded source nesting exceeds the configured limit")
             }
-            Self::EmbeddedDataNotFound => formatter.write_str("embedded data marker was not found"),
+            Self::EmbeddedDataNotFound => {
+                formatter.write_str("embedded data marker was not found")
+            }
             Self::InvalidEmbeddedData => {
                 formatter.write_str("embedded data is incomplete or invalid")
             }
