@@ -1,7 +1,7 @@
 use futures_util::{stream::FuturesUnordered, StreamExt};
 use metasearch_api::{
-    ApiError, EngineCatalogueResponse, EngineDescriptorResponse, ErrorCode, SearchRequest,
-    SearchResponse, SearxCompatResponse, ValidatedSearchRequest,
+    ApiError, EngineCatalogueResponse, EngineDescriptorResponse, ErrorCode, FieldViolation,
+    SearchRequest, SearchResponse, SearxCompatResponse, ValidatedSearchRequest,
 };
 use metasearch_core::{
     build_cache_key, deduplicate, normalize_provider_result, rank_results, CacheKeyInput,
@@ -9,7 +9,9 @@ use metasearch_core::{
     FailureKind, NormalizedQuery, RankingStrategy, SafeSearch, SearchEngine, TimeRange,
     ENGINE_REGISTRY_VERSION,
 };
-use metasearch_engines::{default_engine_ids, find_engine, registry, RegisteredEngine};
+use metasearch_engines::{
+    default_engine_ids, find_engine, registry, resolve_bangs, BangResolution, RegisteredEngine,
+};
 use metasearch_http::WorkerFetchClient;
 use metasearch_state::NoopEngineState;
 use serde::Serialize;
@@ -189,6 +191,7 @@ fn parse_time_range(value: Option<String>) -> Option<TimeRange> {
 
 fn parse_ranking(value: Option<String>) -> Option<RankingStrategy> {
     match value.as_deref() {
+        Some("query-aware-v1") => Some(RankingStrategy::QueryAwareV1),
         Some("rrf-v1") => Some(RankingStrategy::RrfV1),
         Some("searx-compat-v1") => Some(RankingStrategy::SearxCompatV1),
         _ => None,
@@ -237,6 +240,54 @@ fn request_from_url(req: &Request, compatibility: bool) -> Result<SearchRequest,
             .get("timeout_ms")
             .and_then(|value| value.parse().ok()),
     })
+}
+
+fn invalid_query(message: impl Into<String>) -> ApiError {
+    ApiError::invalid(vec![FieldViolation {
+        field: "query".into(),
+        message: message.into(),
+    }])
+}
+
+fn resolve_search_request(
+    mut request: SearchRequest,
+) -> Result<(SearchRequest, BangResolution), ApiError> {
+    let (raw_query, query_field) = match (&request.query, &request.q) {
+        (Some(_), Some(_)) => {
+            return Err(invalid_query("provide either query or q, not both"));
+        }
+        (Some(query), None) => (query.clone(), "query"),
+        (None, Some(query)) => (query.clone(), "q"),
+        (None, None) => (String::new(), "query"),
+    };
+
+    let resolution = resolve_bangs(&raw_query).map_err(|error| invalid_query(error.to_string()))?;
+    if query_field == "q" {
+        request.q = Some(resolution.provider_query.clone());
+    } else {
+        request.query = Some(resolution.provider_query.clone());
+    }
+
+    if !resolution.engines.is_empty() {
+        if !request.categories.is_empty() {
+            return Err(invalid_query(
+                "engine bangs cannot be combined with explicit categories",
+            ));
+        }
+        request.engines.extend(resolution.engines.iter().cloned());
+    }
+    if !resolution.categories.is_empty() {
+        if !request.engines.is_empty() {
+            return Err(invalid_query(
+                "category bangs cannot be combined with explicit engines",
+            ));
+        }
+        request
+            .categories
+            .extend(resolution.categories.iter().cloned());
+    }
+
+    Ok((request, resolution))
 }
 
 fn select_engines(query: &NormalizedQuery) -> Result<Vec<&'static RegisteredEngine>, ApiError> {
@@ -432,7 +483,11 @@ async fn run_engine(
     }
 }
 
-fn aggregate_cache_key(query: &NormalizedQuery, selected: &[&'static RegisteredEngine]) -> String {
+fn aggregate_cache_key(
+    query: &NormalizedQuery,
+    resolution: &BangResolution,
+    selected: &[&'static RegisteredEngine],
+) -> String {
     let engines: Vec<String> = selected
         .iter()
         .map(|engine| engine.descriptor().id.into())
@@ -451,8 +506,12 @@ fn aggregate_cache_key(query: &NormalizedQuery, selected: &[&'static RegisteredE
         .cursor
         .as_deref()
         .map(|cursor| sha256_hex(cursor.as_bytes()));
+    let aggregate_query = format!(
+        "{}\u{0}{}",
+        resolution.original_query, resolution.provider_query
+    );
     build_cache_key(&CacheKeyInput {
-        normalized_query: &query.text,
+        normalized_query: &aggregate_query,
         engine_ids: &engines,
         categories: &query.categories,
         page: query.page,
@@ -501,7 +560,8 @@ fn log_search(query: &NormalizedQuery, response: &SearchResponse, duration_ms: u
         serde_json::json!({
             "event":"search_complete",
             "request_id":response.request_id,
-            "query_hash":sha256_hex(query.text.as_bytes()),
+            "query_hash":sha256_hex(response.query.as_bytes()),
+            "provider_query_hash":sha256_hex(query.text.as_bytes()),
             "selected_engines":response.engines.iter().map(|report| report.engine_id.as_str()).collect::<Vec<_>>(),
             "successful_engines":successful,
             "failed_engines":failed,
@@ -509,6 +569,7 @@ fn log_search(query: &NormalizedQuery, response: &SearchResponse, duration_ms: u
             "duration_ms":duration_ms,
             "result_count":response.result_count,
             "partial":response.partial,
+            "bangs":response.bangs,
         })
     );
 }
@@ -544,11 +605,16 @@ fn write_analytics(env: &Env, reports: &[EngineExecutionReport]) {
 
 async fn execute_search(
     query: NormalizedQuery,
+    resolution: &BangResolution,
     ctx: &RouteContext<AppData>,
     id: &str,
 ) -> Result<SearchResponse, ApiError> {
     let selected = select_engines(&query)?;
-    let cache_key = aggregate_cache_key(&query, &selected);
+    let resolved_engines: Vec<String> = selected
+        .iter()
+        .map(|engine| engine.descriptor().id.to_owned())
+        .collect();
+    let cache_key = aggregate_cache_key(&query, resolution, &selected);
     if let Ok(Some(mut cached)) = Cache::default().get(&cache_key, true).await {
         if let Ok(mut response) = cached.json::<SearchResponse>().await {
             response.request_id = id.into();
@@ -628,13 +694,21 @@ async fn execute_search(
         ));
     }
 
-    let mut results = rank_results(deduplicate(normalized), query.ranking)
-        .map_err(|error| ApiError::new(ErrorCode::InternalError, error.to_string()))?;
+    let mut results = rank_results(
+        deduplicate(normalized),
+        query.ranking,
+        &resolution.provider_query,
+    )
+    .map_err(|error| ApiError::new(ErrorCode::InternalError, error.to_string()))?;
     results.truncate(usize::from(query.limit));
     let partial = !failures.is_empty();
     let response = SearchResponse {
         request_id: id.into(),
-        query: query.text.clone(),
+        query: resolution.original_query.clone(),
+        provider_query: query.text.clone(),
+        bangs: resolution.bangs.clone(),
+        resolved_categories: query.categories.clone(),
+        resolved_engines,
         ranking: query.ranking,
         partial,
         cached: false,
@@ -678,12 +752,16 @@ async fn handle_search_request(
             return problem_response(error, &path, &id);
         }
     }
+    let (search_request, resolution) = match resolve_search_request(search_request) {
+        Ok(resolved) => resolved,
+        Err(error) => return problem_response(error, &path, &id),
+    };
     let query = match ValidatedSearchRequest::try_from(search_request) {
         Ok(validated) => validated.0,
         Err(error) => return problem_response(error, &path, &id),
     };
     let started = Date::now().as_millis() as u64;
-    match execute_search(query.clone(), &ctx, &id).await {
+    match execute_search(query.clone(), &resolution, &ctx, &id).await {
         Ok(response) => {
             log_search(
                 &query,
@@ -783,11 +861,15 @@ async fn searx_compat(req: Request, ctx: RouteContext<AppData>) -> worker::Resul
         Ok(request) => request,
         Err(error) => return problem_response(error, &req.path(), &id),
     };
+    let (request, resolution) = match resolve_search_request(request) {
+        Ok(resolved) => resolved,
+        Err(error) => return problem_response(error, &req.path(), &id),
+    };
     let query = match ValidatedSearchRequest::try_from(request) {
         Ok(validated) => validated.0,
         Err(error) => return problem_response(error, &req.path(), &id),
     };
-    match execute_search(query.clone(), &ctx, &id).await {
+    match execute_search(query.clone(), &resolution, &ctx, &id).await {
         Ok(response) => {
             let compatibility = SearxCompatResponse {
                 query: response.query,
