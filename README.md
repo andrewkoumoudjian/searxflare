@@ -14,7 +14,7 @@ The canonical system design is [`architecture.md`](architecture.md). Public cont
 - restricted HTTPS-only outbound transport with host allow-lists, manual redirects, deadlines, bounded bodies, content-type checks and challenge classification
 - Cache API for aggregate, per-engine and negative responses
 - stateless and KV engine-state adapters plus a Durable Object coordinator contract
-- arXiv Atom, Wikipedia Action API JSON, DuckDuckGo HTML, Brave Web HTML, Qwant Web JSON, PubMed JSON, Semantic Scholar JSON, Crossref JSON and GitHub REST JSON adapters
+- arXiv Atom, Wikipedia Action API JSON, DuckDuckGo HTML, Brave Web HTML, Qwant Web JSON, PubMed JSON, Semantic Scholar JSON, Crossref JSON, GitHub REST JSON, Mojeek HTML and Yahoo HTML adapters
 - four default-enabled adapters, including DuckDuckGo and Brave as independent general-web providers
 - Unicode NFC query normalisation, URL canonicalisation and exact canonical-URL deduplication
 - engine-agnostic public results with provider metadata namespaced by engine ID
@@ -22,7 +22,9 @@ The canonical system design is [`architecture.md`](architecture.md). Public cont
 - SearXNG-style compile-time bangs for engine, category and profile selection
 - structured logs and optional Analytics Engine events
 
-Brave completes the canonical architecture's Milestone 5 default provider-diversity goal. Qwant is implemented and available for explicit requests, but remains default-disabled because its public frontend challenged Cloudflare preview egress during delivery validation. Each provider has a fixed host allow-list, bounded request construction, fixture-backed parsing and independent partial-failure semantics. Their public frontend contracts remain provider-controlled and may change without notice.
+Brave completes the canonical architecture's Milestone 5 default provider-diversity goal. Qwant, Mojeek and Yahoo are implemented and available for explicit requests, but remain default-disabled until live Cloudflare preview egress is validated. Each provider has a fixed host allow-list, bounded request construction, fixture-backed parsing and independent partial-failure semantics. Their public frontend contracts remain provider-controlled and may change without notice.
+
+Qwant's request count and page offset follow the caller's bounded `limit`. Mojeek uses bounded page offsets, safe-search, locale cookies and date filters. Yahoo uses a compile-time regional host map, bounded page offsets, language and safe-search cookies, day/week/month filters and provider tracking-URL unwrapping. Mojeek and Yahoo HTML parsing runs through the repository's streaming `lol-html` parser with explicit changed-layout detection.
 
 arXiv uses its official Atom API with provider-safe multi-term query construction and explicit Atom error detection. Wikipedia uses the official MediaWiki Action API rather than the human Special:Search HTML surface, avoiding frontend challenge pages while preserving bounded paging, locale selection, extracts, canonical URLs and thumbnails.
 
@@ -41,6 +43,8 @@ Supported aliases include:
 - `!gh` and `!github` for GitHub repository search
 - `!wp` and `!wikipedia` for Wikipedia
 - `!ax` and `!arxiv` for arXiv
+- `!mj` and `!mojeek` for Mojeek
+- `!yh` and `!yahoo` for Yahoo
 - `!ddg`, `!brave`, `!qw`, `!qwant`, `!pubmed`, `!ss`, `!semantic-scholar`, `!cr` and `!crossref`
 
 Multiple engine bangs may be combined, as may compatible category aliases. Mixing an engine bang with a category bang is rejected deterministically. Unknown bangs and bang-only queries return `INVALID_REQUEST`. Prefix a bang with `\` to keep it as literal query text.
@@ -117,11 +121,18 @@ curl -H 'Authorization: Bearer replace-with-a-long-random-key' \
   'http://127.0.0.1:8787/v1/search?q=!gh+cloudflare+workers+rust'
 ```
 
-Explicitly request all registered general-web providers, including default-disabled Qwant:
+Combine Mojeek and Yahoo through bangs:
 
 ```bash
 curl -H 'Authorization: Bearer replace-with-a-long-random-key' \
-  'http://127.0.0.1:8787/v1/search?q=cloudflare&engines=duckduckgo-html,brave-web,qwant-web'
+  'http://127.0.0.1:8787/v1/search?q=!mj+!yh+independent+search'
+```
+
+Explicitly request all registered general-web providers, including the default-disabled providers:
+
+```bash
+curl -H 'Authorization: Bearer replace-with-a-long-random-key' \
+  'http://127.0.0.1:8787/v1/search?q=cloudflare&engines=duckduckgo-html,brave-web,qwant-web,mojeek-web,yahoo-web'
 ```
 
 Explicitly request the specialized academic providers:
