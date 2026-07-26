@@ -16,7 +16,7 @@ Reviewed: 2026-07-26
 
 These sources were used to confirm the Worker Fetch execution model, preview deployment behavior, secret handling, deployment/version inspection, `workers-rs` execution model, `wasm32-unknown-unknown` target, `worker-build` workflow, and dependency review expectations. The supported-crates page is explicitly non-exhaustive, so dependency compatibility is established by the repository's exact-target build and workerd tests rather than by documentation listings alone. Live account state was checked separately through Cloudflare Code Mode; documentation is not treated as proof of deployment.
 
-`lol-html` 3.0.0 was already present in the workspace and remains the required bounded streaming parser for HTML providers. No browser DOM or native HTML parser was introduced.
+`lol-html` 3.0.0 was already present in the workspace and remains the required bounded streaming parser for HTML providers. Mojeek and Yahoo use the shared selector parser, so no browser DOM or native HTML parser was introduced. `js-sys`, already present in the workspace lockfile, supplies the Worker-compatible clock used to build deterministic Mojeek date filters.
 
 ## SearXNG behavioral references
 
@@ -33,9 +33,11 @@ Files and documentation consulted:
 - `searx/engines/brave.py`
 - `searx/engines/qwant.py`
 - `searx/engines/github.py`
+- `searx/engines/mojeek.py`
+- `searx/engines/yahoo.py`
 - https://docs.searxng.org/user/configured_engines.html
 
-The reference was used to identify public endpoints, stable query parameters, result containers, paging limits, safe-search mapping, locale handling, provider error shapes, arXiv namespace handling, and user-facing engine/category bang behavior. Searxflare does not copy SearXNG control flow or Python implementation. The Rust adapters use the repository's own engine traits, restricted transport, bounded parsers, failure taxonomy, caching, ranking, and `wasm32-unknown-unknown` constraints.
+The reference was used to identify public endpoints, stable query parameters, result containers, paging limits, safe-search mapping, locale handling, provider error shapes, arXiv namespace handling, Yahoo regional and tracking-URL behavior, Mojeek paging and filter conventions, and user-facing engine/category bang behavior. Searxflare does not copy SearXNG control flow or Python implementation. The Rust adapters use the repository's own engine traits, restricted transport, bounded parsers, failure taxonomy, caching, ranking, and `wasm32-unknown-unknown` constraints.
 
 SearXNG is AGPL-3.0-or-later. These notes preserve provenance and make the clean-room behavioral adaptation explicit. See `spec/licensing.md` for the repository's licensing policy.
 
@@ -45,8 +47,18 @@ The standalone request values `github`, `3.0`, and `1.0` match fields displayed 
 
 - Brave public search frontend: `https://search.brave.com/search`
 - Qwant public frontend JSON surface: `https://api.qwant.com/v3/search/web`
+- Mojeek public search frontend: `https://www.mojeek.com/search`
+- Yahoo public regional search frontends under the compile-time `*.search.yahoo.com` host set
+- Mojeek request parameter reference: https://www.mojeek.com/support/api/search/request_parameters.html
+- Mojeek search operators: https://www.mojeek.com/support/search-operators.html
+- Yahoo regional and language help: https://help.yahoo.com/kb/regional-language-specific-yahoo-search-results-sln6583.html
+- Yahoo SafeSearch help: https://help.yahoo.com/kb/search-for-desktop/select-setting-yahoo-safesearch-sln2247.html
 
-Neither surface is a supported public API contract. Provider behavior can change, rate-limit, challenge, or deny Cloudflare egress. The implementation does not bypass those controls; failures remain isolated and observable.
+Brave, Qwant, Mojeek HTML and Yahoo HTML are provider-controlled public frontend contracts rather than supported unauthenticated APIs. Provider behavior can change, rate-limit, challenge, or deny Cloudflare egress. The implementation does not bypass those controls; failures remain isolated and observable.
+
+Mojeek's official request reference documents `q`, `s`, `since`, `safe`, language and region concepts for its authenticated Search API. The Searxflare adapter does not claim API access and does not send an API key; it uses the public HTML frontend pattern validated by the current SearXNG implementation. Yahoo's official help confirms regional or language filtering where available and the Off, Moderate and Strict SafeSearch levels. The exact frontend cookie and paging mappings remain provider-controlled and were adapted from current SearXNG behavior.
+
+Qwant's request builder now uses the caller's bounded result limit for both `count` and page-offset calculation. Its parser version was bumped so previous cache entries cannot hide the changed request semantics.
 
 ## Official reference, academic and code APIs
 
@@ -88,7 +100,7 @@ Exa's remote MCP endpoint can be reached by MCP clients over Streamable HTTP and
 - `cloudflare/boring`: native BoringSSL bindings and Tokio/Hyper TLS adapters. It remains excluded from the Worker runtime because it does not provide a `wasm32-unknown-unknown` Workers Fetch path.
 - `cloudflare/wildcard`: useful for wildcard matching, but the current outbound policy uses a small exact compile-time hostname set. Adding it would increase dependency surface without improving current correctness.
 - `cloudflare/sliceslice-rs`: AVX2/x86 substring search. It is incompatible with the Worker Wasm target and unnecessary for bounded provider responses.
-- `cloudflare/entropy-map`: compact immutable minimal-perfect-hash maps. The nine-entry engine registry and current ranking tables are too small to justify construction complexity or bundle cost; retain as a future option for genuinely large immutable lookup tables.
+- `cloudflare/entropy-map`: compact immutable minimal-perfect-hash maps. The eleven-entry engine registry and current ranking tables are too small to justify construction complexity or bundle cost; retain as a future option for genuinely large immutable lookup tables.
 - `cloudflare/cardinality-estimator`: HyperLogLog++ distinct counting. It is relevant to later telemetry aggregation, not request-time result reranking, and is deferred until per-provider analytics need approximate cardinality.
 - `Anush008/fastembed-rs`: local ONNX/Candle embeddings and rerankers. Its model weights, ORT/tokenizer stack, native-oriented download/TLS defaults and runtime footprint do not fit the current Worker Wasm bundle and latency budget. Semantic reranking should use a separately validated Worker-compatible inference path rather than embedding this crate in the request Worker.
 
