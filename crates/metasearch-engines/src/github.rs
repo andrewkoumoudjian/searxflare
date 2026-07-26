@@ -122,8 +122,8 @@ fn parse_results(body: &[u8]) -> Result<Vec<ProviderResult>, EngineFailure> {
         let Some(title) = optional_string(item, "full_name") else {
             continue;
         };
-        let Some(url) = optional_string(item, "html_url")
-            .filter(|candidate| Url::parse(candidate).is_ok())
+        let Some(url) =
+            optional_string(item, "html_url").filter(|candidate| Url::parse(candidate).is_ok())
         else {
             continue;
         };
@@ -249,11 +249,17 @@ mod tests {
         let parameters: BTreeMap<_, _> = request.url.query_pairs().into_owned().collect();
         assert_eq!(request.url.host_str(), Some("api.github.com"));
         assert_eq!(request.url.path(), "/search/repositories");
-        assert_eq!(parameters.get("q").map(String::as_str), Some("cloudflare workers rust"));
+        assert_eq!(
+            parameters.get("q").map(String::as_str),
+            Some("cloudflare workers rust")
+        );
         assert_eq!(parameters.get("page").map(String::as_str), Some("2"));
         assert_eq!(parameters.get("per_page").map(String::as_str), Some("10"));
         assert_eq!(
-            request.headers.get("x-github-api-version").map(String::as_str),
+            request
+                .headers
+                .get("x-github-api-version")
+                .map(String::as_str),
             Some("2026-03-10")
         );
     }
