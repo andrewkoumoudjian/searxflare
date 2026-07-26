@@ -117,7 +117,7 @@ impl SearchEngine for ArxivEngine {
             .send(&DESCRIPTOR, request, context.deadline)
             .await?;
         let records = parse_arxiv_atom(&response.body).map_err(|error| {
-            let kind = match error {
+            let kind = match &error {
                 ParserError::ProviderError(_) => FailureKind::InvalidRequest,
                 _ => FailureKind::EngineParseFailed,
             };
