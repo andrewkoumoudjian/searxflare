@@ -17,78 +17,35 @@ struct BangSpec {
 const BOOKS_PROFILE: &[&str] = &["crossref"];
 
 const BANG_REGISTRY: &[BangSpec] = &[
-    BangSpec {
-        alias: "general",
-        target: BangTarget::Category("general"),
-    },
-    BangSpec {
-        alias: "web",
-        target: BangTarget::Category("general"),
-    },
-    BangSpec {
-        alias: "books",
-        target: BangTarget::Profile(BOOKS_PROFILE),
-    },
-    BangSpec {
-        alias: "arxiv",
-        target: BangTarget::Engine("arxiv"),
-    },
-    BangSpec {
-        alias: "ax",
-        target: BangTarget::Engine("arxiv"),
-    },
-    BangSpec {
-        alias: "wikipedia",
-        target: BangTarget::Engine("wikipedia"),
-    },
-    BangSpec {
-        alias: "wp",
-        target: BangTarget::Engine("wikipedia"),
-    },
-    BangSpec {
-        alias: "ddg",
-        target: BangTarget::Engine("duckduckgo-html"),
-    },
-    BangSpec {
-        alias: "brave",
-        target: BangTarget::Engine("brave-web"),
-    },
-    BangSpec {
-        alias: "qwant",
-        target: BangTarget::Engine("qwant-web"),
-    },
-    BangSpec {
-        alias: "qw",
-        target: BangTarget::Engine("qwant-web"),
-    },
-    BangSpec {
-        alias: "pubmed",
-        target: BangTarget::Engine("pubmed"),
-    },
-    BangSpec {
-        alias: "semantic-scholar",
-        target: BangTarget::Engine("semantic-scholar"),
-    },
-    BangSpec {
-        alias: "ss",
-        target: BangTarget::Engine("semantic-scholar"),
-    },
-    BangSpec {
-        alias: "crossref",
-        target: BangTarget::Engine("crossref"),
-    },
-    BangSpec {
-        alias: "cr",
-        target: BangTarget::Engine("crossref"),
-    },
-    BangSpec {
-        alias: "github",
-        target: BangTarget::Engine("github"),
-    },
-    BangSpec {
-        alias: "gh",
-        target: BangTarget::Engine("github"),
-    },
+    BangSpec { alias: "general", target: BangTarget::Category("general") },
+    BangSpec { alias: "web", target: BangTarget::Category("general") },
+    BangSpec { alias: "books", target: BangTarget::Profile(BOOKS_PROFILE) },
+    BangSpec { alias: "arxiv", target: BangTarget::Engine("arxiv") },
+    BangSpec { alias: "ax", target: BangTarget::Engine("arxiv") },
+    BangSpec { alias: "wikipedia", target: BangTarget::Engine("wikipedia") },
+    BangSpec { alias: "wp", target: BangTarget::Engine("wikipedia") },
+    BangSpec { alias: "ddg", target: BangTarget::Engine("duckduckgo-html") },
+    BangSpec { alias: "brave", target: BangTarget::Engine("brave-web") },
+    BangSpec { alias: "qwant", target: BangTarget::Engine("qwant-web") },
+    BangSpec { alias: "qw", target: BangTarget::Engine("qwant-web") },
+    BangSpec { alias: "mojeek", target: BangTarget::Engine("mojeek-web") },
+    BangSpec { alias: "mj", target: BangTarget::Engine("mojeek-web") },
+    BangSpec { alias: "yahoo", target: BangTarget::Engine("yahoo-web") },
+    BangSpec { alias: "yh", target: BangTarget::Engine("yahoo-web") },
+    BangSpec { alias: "yandex", target: BangTarget::Engine("yandex-web") },
+    BangSpec { alias: "ya", target: BangTarget::Engine("yandex-web") },
+    BangSpec { alias: "baidu", target: BangTarget::Engine("baidu-web") },
+    BangSpec { alias: "bd", target: BangTarget::Engine("baidu-web") },
+    BangSpec { alias: "google", target: BangTarget::Engine("google-web") },
+    BangSpec { alias: "grokipedia", target: BangTarget::Engine("grokipedia") },
+    BangSpec { alias: "grok", target: BangTarget::Engine("grokipedia") },
+    BangSpec { alias: "pubmed", target: BangTarget::Engine("pubmed") },
+    BangSpec { alias: "semantic-scholar", target: BangTarget::Engine("semantic-scholar") },
+    BangSpec { alias: "ss", target: BangTarget::Engine("semantic-scholar") },
+    BangSpec { alias: "crossref", target: BangTarget::Engine("crossref") },
+    BangSpec { alias: "cr", target: BangTarget::Engine("crossref") },
+    BangSpec { alias: "github", target: BangTarget::Engine("github") },
+    BangSpec { alias: "gh", target: BangTarget::Engine("github") },
 ];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -111,12 +68,10 @@ impl Display for BangError {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Unknown(bang) => write!(formatter, "unknown bang: !{bang}"),
-            Self::Conflicting(left, right) => {
-                write!(
-                    formatter,
-                    "conflicting bangs cannot be combined: !{left} and !{right}"
-                )
-            }
+            Self::Conflicting(left, right) => write!(
+                formatter,
+                "conflicting bangs cannot be combined: !{left} and !{right}"
+            ),
             Self::EmptyQuery => formatter.write_str("a search query cannot contain only bangs"),
         }
     }
@@ -211,6 +166,20 @@ mod tests {
 
         let books = resolve_bangs("!books food safety").unwrap();
         assert_eq!(books.engines, vec!["crossref"]);
+
+        let providers = resolve_bangs("!mj !yh !ya !bd !google !grok independent search").unwrap();
+        assert_eq!(providers.provider_query, "independent search");
+        assert_eq!(
+            providers.engines,
+            vec![
+                "baidu-web",
+                "google-web",
+                "grokipedia",
+                "mojeek-web",
+                "yahoo-web",
+                "yandex-web"
+            ]
+        );
     }
 
     #[test]
