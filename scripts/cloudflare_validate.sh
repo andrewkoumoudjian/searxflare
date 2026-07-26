@@ -18,8 +18,7 @@ cd "$ROOT_DIR"
 
 rustup component add rustfmt clippy --toolchain "$RUST_TOOLCHAIN"
 
-# Diagnostic-only: format the ephemeral checkout before running the complete matrix.
-cargo "+$RUST_TOOLCHAIN" fmt
+cargo "+$RUST_TOOLCHAIN" fmt --check
 cargo "+$RUST_TOOLCHAIN" clippy --locked --workspace --all-targets --all-features -- -D warnings
 cargo "+$RUST_TOOLCHAIN" test --locked --workspace
 cargo "+$RUST_TOOLCHAIN" build --locked --workspace --target wasm32-unknown-unknown
