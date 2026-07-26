@@ -1,0 +1,26 @@
+id: baidu-web
+display_name: Baidu Web
+endpoint: https://www.baidu.com/s
+method: GET
+categories: [general]
+source_kind: html
+allowed_hosts: [www.baidu.com]
+capabilities:
+  paging: true
+  locale: false
+  country: false
+  safe_search: false
+  time_range: false
+limits:
+  timeout_ms: 3500
+  max_body_bytes: 2097152
+  max_steps: 3
+  max_redirects: 2
+versions:
+  parser: baidu-web-html-v1
+cache:
+  response_ttl_seconds: 180
+  negative_ttl_seconds: 30
+state: stateless
+default_enabled: false
+notes: Uses the public HTML frontend with fixed hosts, bounded ten-result paging, UTF-8 requests, streaming lol-html parsing, and explicit changed-layout detection. Provider tracking result URLs are returned without a second resolution fetch. Default-disabled pending Cloudflare preview validation.
