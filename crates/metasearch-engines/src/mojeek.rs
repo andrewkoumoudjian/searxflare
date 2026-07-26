@@ -50,6 +50,8 @@ const SELECTORS: SelectorResultSpec = SelectorResultSpec {
     thumbnail: None,
 };
 
+const MILLIS_PER_DAY: u64 = 86_400_000;
+
 fn safe_search_code(value: SafeSearch) -> &'static str {
     match value {
         SafeSearch::Off => "0",
@@ -98,20 +100,6 @@ fn civil_from_days(days_since_epoch: i64) -> (i32, u32, u32) {
     (year as i32, month as u32, day as u32)
 }
 
-#[cfg(target_arch = "wasm32")]
-fn utc_days_now() -> i64 {
-    (js_sys::Date::now() / 86_400_000.0).floor() as i64
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-fn utc_days_now() -> i64 {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|duration| (duration.as_secs() / 86_400) as i64)
-        .unwrap_or_default()
-}
-
 fn since_date_at(value: TimeRange, today_days: i64) -> String {
     let (year, month, day) = civil_from_days(today_days);
     let (year, month, day) = match value {
@@ -141,7 +129,10 @@ fn since_date_at(value: TimeRange, today_days: i64) -> String {
     format!("{year:04}{month:02}{day:02}")
 }
 
-fn build_request(query: &NormalizedQuery) -> Result<EngineRequest, EngineFailure> {
+fn build_request(
+    query: &NormalizedQuery,
+    request_started_at_ms: u64,
+) -> Result<EngineRequest, EngineFailure> {
     let page = query.page_number();
     if page > 10 {
         return Err(EngineFailure::new(
@@ -163,7 +154,8 @@ fn build_request(query: &NormalizedQuery) -> Result<EngineRequest, EngineFailure
             pairs.append_pair("s", &(10 * (page - 1)).to_string());
         }
         if let Some(time_range) = query.time_range {
-            pairs.append_pair("since", &since_date_at(time_range, utc_days_now()));
+            let today_days = (request_started_at_ms / MILLIS_PER_DAY) as i64;
+            pairs.append_pair("since", &since_date_at(time_range, today_days));
         }
     }
 
@@ -232,7 +224,11 @@ impl SearchEngine for MojeekEngine {
         query: &NormalizedQuery,
         context: &EngineContext<'_>,
     ) -> Result<EngineOutput, EngineFailure> {
-        let request = build_request(query)?;
+        let request_started_at_ms = context
+            .deadline
+            .expires_at_ms()
+            .saturating_sub(u64::from(query.timeout_ms));
+        let request = build_request(query, request_started_at_ms)?;
         let request_url = request.url.clone();
         let response = context
             .http
@@ -273,16 +269,14 @@ mod tests {
 
     #[test]
     fn builds_bounded_locale_safe_and_time_request() {
-        let mut value = query();
-        value.time_range = None;
-        let request = build_request(&value).unwrap();
+        let request = build_request(&query(), 20_300_u64 * MILLIS_PER_DAY).unwrap();
         let parameters: BTreeMap<_, _> = request.url.query_pairs().into_owned().collect();
         assert_eq!(request.url.host_str(), Some("www.mojeek.com"));
         assert_eq!(parameters.get("s").map(String::as_str), Some("10"));
         assert_eq!(parameters.get("safe").map(String::as_str), Some("1"));
+        assert_eq!(parameters.get("since").map(String::as_str), Some("20250630"));
         assert_eq!(request.cookies.get("lb").map(String::as_str), Some("fr"));
         assert_eq!(request.cookies.get("arc").map(String::as_str), Some("CA"));
-        assert_eq!(since_date_at(TimeRange::Month, 20_300), "20250630");
     }
 
     #[test]
@@ -290,7 +284,9 @@ mod tests {
         let mut value = query();
         value.page = Some(11);
         assert_eq!(
-            build_request(&value).unwrap_err().kind,
+            build_request(&value, 20_300_u64 * MILLIS_PER_DAY)
+                .unwrap_err()
+                .kind,
             FailureKind::UnsupportedCapability
         );
     }
