@@ -112,7 +112,10 @@ impl Display for BangError {
         match self {
             Self::Unknown(bang) => write!(formatter, "unknown bang: !{bang}"),
             Self::Conflicting(left, right) => {
-                write!(formatter, "conflicting bangs cannot be combined: !{left} and !{right}")
+                write!(
+                    formatter,
+                    "conflicting bangs cannot be combined: !{left} and !{right}"
+                )
             }
             Self::EmptyQuery => formatter.write_str("a search query cannot contain only bangs"),
         }
