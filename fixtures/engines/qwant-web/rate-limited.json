@@ -1,0 +1,7 @@
+{
+  "status": "error",
+  "data": {
+    "error_code": 24,
+    "message": ["too many requests"]
+  }
+}

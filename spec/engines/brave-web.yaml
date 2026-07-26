@@ -1,0 +1,26 @@
+id: brave-web
+display_name: Brave Web
+endpoint: https://search.brave.com/search
+method: GET
+categories: [general]
+source_kind: html
+allowed_hosts: [search.brave.com]
+capabilities:
+  paging: true
+  locale: true
+  country: true
+  safe_search: true
+  time_range: true
+limits:
+  timeout_ms: 3500
+  max_body_bytes: 2097152
+  max_steps: 3
+  max_redirects: 2
+versions:
+  parser: brave-web-html-v1
+cache:
+  response_ttl_seconds: 180
+  negative_ttl_seconds: 30
+state: stateless
+default_enabled: true
+notes: Clean-room Rust implementation informed by SearXNG searx/engines/brave.py at 0909dbc9efb2c6e93e2ad51e60e66417ab291710. Uses q, source, optional offset and tf plus fixed safesearch, location, country and UI-language cookies. Internal Brave links are not returned as results.

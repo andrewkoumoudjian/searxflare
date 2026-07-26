@@ -1,5 +1,6 @@
 use crate::{
-    arxiv::ArxivEngine, duckduckgo_html::DuckDuckGoHtmlEngine, wikipedia::WikipediaEngine,
+    arxiv::ArxivEngine, brave::BraveEngine, duckduckgo_html::DuckDuckGoHtmlEngine,
+    qwant::QwantEngine, wikipedia::WikipediaEngine,
 };
 use metasearch_core::{
     EngineContext, EngineDescriptor, EngineFailure, EngineOutput, NormalizedQuery, SearchEngine,
@@ -10,6 +11,8 @@ pub enum RegisteredEngine {
     Arxiv,
     Wikipedia,
     DuckDuckGoHtml,
+    Brave,
+    Qwant,
 }
 
 #[async_trait::async_trait(?Send)]
@@ -19,6 +22,8 @@ impl SearchEngine for RegisteredEngine {
             Self::Arxiv => ArxivEngine.descriptor(),
             Self::Wikipedia => WikipediaEngine.descriptor(),
             Self::DuckDuckGoHtml => DuckDuckGoHtmlEngine.descriptor(),
+            Self::Brave => BraveEngine.descriptor(),
+            Self::Qwant => QwantEngine.descriptor(),
         }
     }
 
@@ -31,14 +36,18 @@ impl SearchEngine for RegisteredEngine {
             Self::Arxiv => ArxivEngine.search(query, context).await,
             Self::Wikipedia => WikipediaEngine.search(query, context).await,
             Self::DuckDuckGoHtml => DuckDuckGoHtmlEngine.search(query, context).await,
+            Self::Brave => BraveEngine.search(query, context).await,
+            Self::Qwant => QwantEngine.search(query, context).await,
         }
     }
 }
 
-static REGISTRY: [RegisteredEngine; 3] = [
+static REGISTRY: [RegisteredEngine; 5] = [
     RegisteredEngine::Arxiv,
     RegisteredEngine::Wikipedia,
     RegisteredEngine::DuckDuckGoHtml,
+    RegisteredEngine::Brave,
+    RegisteredEngine::Qwant,
 ];
 
 pub fn registry() -> &'static [RegisteredEngine] {

@@ -4,7 +4,7 @@ Searxflare is an API-only metasearch engine written in Rust for Cloudflare Worke
 
 The canonical system design is [`architecture.md`](architecture.md). Public contracts live under [`spec/`](spec/).
 
-## Initial production slice
+## Implemented production slices
 
 - `workers-rs` Router entrypoint
 - bearer API-key authentication for `/v1/*`
@@ -14,10 +14,13 @@ The canonical system design is [`architecture.md`](architecture.md). Public cont
 - restricted HTTPS-only outbound transport with host allow-lists, manual redirects, deadlines, bounded bodies, content-type checks and challenge classification
 - Cache API for aggregate, per-engine and negative responses
 - stateless and KV engine-state adapters plus a Durable Object coordinator contract
-- arXiv Atom, Wikipedia HTML and DuckDuckGo HTML adapters
+- arXiv Atom, Wikipedia HTML, DuckDuckGo HTML, Brave Web HTML and Qwant Web JSON adapters
+- four default-enabled adapters, including DuckDuckGo and Brave as independent general-web providers
 - Unicode NFC query normalisation, URL canonicalisation, exact canonical-URL deduplication
 - `rrf-v1` and `searx-compat-v1` ranking
 - structured logs and optional Analytics Engine events
+
+Brave completes the canonical architecture's Milestone 5 default provider-diversity goal. Qwant is implemented and available for explicit requests, but remains default-disabled because its public frontend challenged Cloudflare preview egress during delivery validation. Each provider has a fixed host allow-list, bounded request construction, fixture-backed parsing and independent partial-failure semantics. Their public frontend contracts remain provider-controlled and may change without notice.
 
 ## Prerequisites
 
@@ -75,6 +78,13 @@ curl -H 'Authorization: Bearer replace-with-a-long-random-key' \
   'http://127.0.0.1:8787/v1/search?q=cloudflare+rust'
 ```
 
+Explicitly request all registered general-web providers, including default-disabled Qwant:
+
+```bash
+curl -H 'Authorization: Bearer replace-with-a-long-random-key' \
+  'http://127.0.0.1:8787/v1/search?q=cloudflare&engines=duckduckgo-html,brave-web,qwant-web'
+```
+
 ## Deployment
 
 See [`docs/deployment.md`](docs/deployment.md) for Wrangler and Cloudflare Git integration settings. A local endpoint working does not prove that the same provider permits Cloudflare production egress.
@@ -90,4 +100,6 @@ Searxflare queries public endpoints without paid search APIs. It does not bypass
 - [Security assumptions](docs/security.md)
 - [Known limitations](docs/known-limitations.md)
 - [Provider disable procedure](docs/provider-disable.md)
+- [Milestone 5 implementation checklist](spec/milestone-5-checklist.md)
+- [Source and provenance notes](SOURCE-NOTES.md)
 - [Licence and provenance](spec/licensing.md)
