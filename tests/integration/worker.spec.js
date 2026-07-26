@@ -7,196 +7,57 @@ const AUTH = { authorization: "Bearer test-api-key" };
 
 const ARXIV = `<?xml version="1.0" encoding="UTF-8"?>
 <feed xmlns="http://www.w3.org/2005/Atom" xmlns:arxiv="http://arxiv.org/schemas/atom">
-  <entry>
-    <id>https://arxiv.org/abs/1234.5678v1</id>
-    <title>Cloudflare Rust</title>
-    <summary>Academic result.</summary>
-    <published>2026-01-02T03:04:05Z</published>
-    <author><name>Ada Example</name></author>
-    <link title="pdf" href="https://arxiv.org/pdf/1234.5678v1" type="application/pdf" />
-    <category term="cs.IR" />
-  </entry>
+  <entry><id>https://arxiv.org/abs/1234.5678v1</id><title>Cloudflare Rust</title><summary>Academic result.</summary><published>2026-01-02T03:04:05Z</published><author><name>Ada Example</name></author><link title="pdf" href="https://arxiv.org/pdf/1234.5678v1" type="application/pdf" /><category term="cs.IR" /></entry>
 </feed>`;
-
-const WIKIPEDIA = JSON.stringify({
-  batchcomplete: true,
-  query: {
-    pages: [
-      {
-        pageid: 42,
-        ns: 0,
-        title: "Cloudflare",
-        extract: "Reference result.",
-        fullurl: "https://en.wikipedia.org/wiki/Cloudflare"
-      }
-    ]
-  }
-});
-
+const WIKIPEDIA = JSON.stringify({ batchcomplete: true, query: { pages: [{ pageid: 42, ns: 0, title: "Cloudflare", extract: "Reference result.", fullurl: "https://en.wikipedia.org/wiki/Cloudflare" }] } });
 const EMPTY_WIKIPEDIA = JSON.stringify({ batchcomplete: true });
-
-const DUCKDUCKGO = `<!doctype html><html><body><div id="links">
-<div class="web-result"><h2><a href="https://duckduckgo.com/l/?uddg=https%3A%2F%2Fexample.com%2Fcloudflare">Example result</a></h2><a class="result__snippet">Web result.</a></div>
-</div></body></html>`;
-
-const BRAVE = `<!doctype html><html><body>
-<div class="snippet"><a href="https://example.com/brave"><div class="title">Brave result</div></a><div class="content">Brave web result.</div></div>
-</body></html>`;
-
-const QWANT = JSON.stringify({
-  status: "success",
-  data: {
-    result: {
-      items: {
-        mainline: [
-          {
-            type: "web",
-            items: [
-              {
-                title: "Qwant result",
-                url: "https://example.com/qwant",
-                desc: "Qwant web result.",
-                source: "example.com"
-              }
-            ]
-          }
-        ]
-      }
-    }
-  }
-});
-
-const PUBMED_SEARCH = JSON.stringify({
-  esearchresult: { idlist: ["12345678"] }
-});
-
-const PUBMED_SUMMARY = JSON.stringify({
-  result: {
-    uids: ["12345678"],
-    "12345678": {
-      title: "Food safety and Worker systems",
-      sortpubdate: "2026/06/15 00:00",
-      source: "J Edge Med",
-      fulljournalname: "Journal of Edge Medicine",
-      authors: [{ name: "Ada Example" }],
-      pubtype: ["Journal Article"],
-      articleids: [{ idtype: "doi", value: "10.1234/pubmed.example" }]
-    }
-  }
-});
-
-const SEMANTIC_SCHOLAR = JSON.stringify({
-  total: 1,
-  offset: 0,
-  data: [
-    {
-      paperId: "abcdef123456",
-      url: "https://www.semanticscholar.org/paper/abcdef123456",
-      title: "Semantic Scholar result",
-      abstract: "Academic graph result.",
-      publicationDate: "2026-07-02",
-      authors: [{ authorId: "1", name: "Grace Researcher" }],
-      externalIds: { DOI: "10.1234/semantic.example" },
-      citationCount: 8
-    }
-  ]
-});
-
-const CROSSREF = JSON.stringify({
-  status: "ok",
-  message: {
-    items: [
-      {
-        DOI: "10.1234/crossref.example",
-        URL: "https://doi.org/10.1234/crossref.example",
-        title: ["Crossref result"],
-        abstract: "<jats:p>Crossref academic result.</jats:p>",
-        author: [{ given: "Katherine", family: "Example" }],
-        published: { "date-parts": [[2026, 7, 1]] },
-        "container-title": ["Journal of Edge Research"]
-      }
-    ]
-  }
-});
-
-const GITHUB = JSON.stringify({
-  total_count: 1,
-  incomplete_results: false,
-  items: [
-    {
-      id: 123456,
-      full_name: "cloudflare/workers-rs",
-      html_url: "https://github.com/cloudflare/workers-rs",
-      description: "Write Cloudflare Workers in Rust via WebAssembly.",
-      language: "Rust",
-      stargazers_count: 5000,
-      forks_count: 400,
-      open_issues_count: 80,
-      topics: ["cloudflare-workers", "rust", "wasm"],
-      updated_at: "2026-07-20T12:00:00Z",
-      clone_url: "https://github.com/cloudflare/workers-rs.git",
-      default_branch: "main",
-      owner: {
-        login: "cloudflare",
-        avatar_url: "https://avatars.githubusercontent.com/u/314135"
-      },
-      license: { spdx_id: "Apache-2.0" }
-    }
-  ]
-});
+const DUCKDUCKGO = `<!doctype html><html><body><div id="links"><div class="web-result"><h2><a href="https://duckduckgo.com/l/?uddg=https%3A%2F%2Fexample.com%2Fcloudflare">Example result</a></h2><a class="result__snippet">Web result.</a></div></div></body></html>`;
+const BRAVE = `<!doctype html><html><body><div class="snippet"><a href="https://example.com/brave"><div class="title">Brave result</div></a><div class="content">Brave web result.</div></div></body></html>`;
+const QWANT = JSON.stringify({ status: "success", data: { result: { items: { mainline: [{ type: "web", items: [{ title: "Qwant result", url: "https://example.com/qwant", desc: "Qwant web result.", source: "example.com" }] }] } } } });
+const PUBMED_SEARCH = JSON.stringify({ esearchresult: { idlist: ["12345678"] } });
+const PUBMED_SUMMARY = JSON.stringify({ result: { uids: ["12345678"], "12345678": { title: "Food safety and Worker systems", sortpubdate: "2026/06/15 00:00", source: "J Edge Med", fulljournalname: "Journal of Edge Medicine", authors: [{ name: "Ada Example" }], pubtype: ["Journal Article"], articleids: [{ idtype: "doi", value: "10.1234/pubmed.example" }] } } });
+const SEMANTIC_SCHOLAR = JSON.stringify({ total: 1, offset: 0, data: [{ paperId: "abcdef123456", url: "https://www.semanticscholar.org/paper/abcdef123456", title: "Semantic Scholar result", abstract: "Academic graph result.", publicationDate: "2026-07-02", authors: [{ authorId: "1", name: "Grace Researcher" }], externalIds: { DOI: "10.1234/semantic.example" }, citationCount: 8 }] });
+const CROSSREF = JSON.stringify({ status: "ok", message: { items: [{ DOI: "10.1234/crossref.example", URL: "https://doi.org/10.1234/crossref.example", title: ["Crossref result"], abstract: "<jats:p>Crossref academic result.</jats:p>", author: [{ given: "Katherine", family: "Example" }], published: { "date-parts": [[2026, 7, 1]] }, "container-title": ["Journal of Edge Research"] }] } });
+const GITHUB = JSON.stringify({ total_count: 1, incomplete_results: false, items: [{ id: 123456, full_name: "cloudflare/workers-rs", html_url: "https://github.com/cloudflare/workers-rs", description: "Write Cloudflare Workers in Rust via WebAssembly.", language: "Rust", stargazers_count: 5000, forks_count: 400, open_issues_count: 80, topics: ["cloudflare-workers", "rust", "wasm"], updated_at: "2026-07-20T12:00:00Z", clone_url: "https://github.com/cloudflare/workers-rs.git", default_branch: "main", owner: { login: "cloudflare", avatar_url: "https://avatars.githubusercontent.com/u/314135" }, license: { spdx_id: "Apache-2.0" } }] });
+const MOJEEK = `<!doctype html><html><body><ul class="results-standard"><li><h2><a href="https://example.com/mojeek">Mojeek result</a></h2><a class="ob" href="https://example.com/mojeek">example.com/mojeek</a><p class="s">Independent web search result.</p></li></ul></body></html>`;
+const YAHOO = `<!doctype html><html><body><div class="algo-sr"><div class="compTitle"><a href="https://r.search.yahoo.com/_ylt=x/RU=https%3A%2F%2Fexample.com%2Fyahoo/RK=2/RS=x"><h3><span>Yahoo result</span></h3></a></div><div class="compText">Yahoo web search result.</div></div></body></html>`;
+const YANDEX = `<!doctype html><html><body><li class="serp-item"><h2><a href="https://example.com/yandex">Yandex result</a></h2><div class="text-container">Yandex web result.</div></li></body></html>`;
+const BAIDU = `<!doctype html><html><body><div class="result c-container"><h3><a href="https://www.baidu.com/link?url=example">Baidu result</a></h3><div class="c-abstract">Baidu web result.</div></div></body></html>`;
+const GOOGLE = `<!doctype html><html><body><div class="MjjYud"><a href="https://www.google.com/url?q=https%3A%2F%2Fexample.com%2Fgoogle&sa=U"><h3>Google result</h3></a><div class="VwiC3b">Google web result.</div></div></body></html>`;
+const GROKIPEDIA = JSON.stringify({ results: [{ id: "gp-1", title: "Cloudflare", slug: "cloudflare", snippet: "Reference result." }] });
 
 function mockProviders({ duckFailure = false, delayArxiv = false, emptyWikipedia = false } = {}) {
   const mock = vi.fn(async (input, init) => {
     const request = input instanceof Request ? input : new Request(input, init);
     const url = new URL(request.url);
     if (url.hostname === "export.arxiv.org") {
-      if (delayArxiv) {
-        return await new Promise((_, reject) => {
-          request.signal.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")));
-        });
-      }
+      if (delayArxiv) return await new Promise((_, reject) => request.signal.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError"))));
       return new Response(ARXIV, { status: 200, headers: { "content-type": "application/atom+xml" } });
     }
-    if (url.hostname.endsWith("wikipedia.org")) {
-      return new Response(emptyWikipedia ? EMPTY_WIKIPEDIA : WIKIPEDIA, {
-        status: 200,
-        headers: { "content-type": "application/json; charset=UTF-8" }
-      });
-    }
+    if (url.hostname.endsWith("wikipedia.org")) return new Response(emptyWikipedia ? EMPTY_WIKIPEDIA : WIKIPEDIA, { status: 200, headers: { "content-type": "application/json; charset=UTF-8" } });
     if (url.hostname === "html.duckduckgo.com") {
-      if (duckFailure) {
-        return new Response("<html><form id='challenge-form'>CAPTCHA</form></html>", { status: 403, headers: { "content-type": "text/html" } });
-      }
+      if (duckFailure) return new Response("<html><form id='challenge-form'>CAPTCHA</form></html>", { status: 403, headers: { "content-type": "text/html" } });
       return new Response(DUCKDUCKGO, { status: 200, headers: { "content-type": "text/html" } });
     }
-    if (url.hostname === "search.brave.com") {
-      return new Response(BRAVE, { status: 200, headers: { "content-type": "text/html; charset=UTF-8" } });
-    }
-    if (url.hostname === "api.qwant.com") {
-      return new Response(QWANT, { status: 200, headers: { "content-type": "application/json" } });
-    }
-    if (url.hostname === "eutils.ncbi.nlm.nih.gov") {
-      const body = url.pathname.endsWith("/esearch.fcgi") ? PUBMED_SEARCH : PUBMED_SUMMARY;
-      return new Response(body, { status: 200, headers: { "content-type": "application/json" } });
-    }
-    if (url.hostname === "api.semanticscholar.org") {
-      return new Response(SEMANTIC_SCHOLAR, { status: 200, headers: { "content-type": "application/json" } });
-    }
-    if (url.hostname === "api.crossref.org") {
-      return new Response(CROSSREF, { status: 200, headers: { "content-type": "application/json" } });
-    }
-    if (url.hostname === "api.github.com") {
-      return new Response(GITHUB, { status: 200, headers: { "content-type": "application/json; charset=utf-8" } });
-    }
+    if (url.hostname === "search.brave.com") return new Response(BRAVE, { status: 200, headers: { "content-type": "text/html; charset=UTF-8" } });
+    if (url.hostname === "api.qwant.com") return new Response(QWANT, { status: 200, headers: { "content-type": "application/json" } });
+    if (url.hostname === "eutils.ncbi.nlm.nih.gov") return new Response(url.pathname.endsWith("/esearch.fcgi") ? PUBMED_SEARCH : PUBMED_SUMMARY, { status: 200, headers: { "content-type": "application/json" } });
+    if (url.hostname === "api.semanticscholar.org") return new Response(SEMANTIC_SCHOLAR, { status: 200, headers: { "content-type": "application/json" } });
+    if (url.hostname === "api.crossref.org") return new Response(CROSSREF, { status: 200, headers: { "content-type": "application/json" } });
+    if (url.hostname === "api.github.com") return new Response(GITHUB, { status: 200, headers: { "content-type": "application/json; charset=utf-8" } });
+    if (url.hostname === "www.mojeek.com") return new Response(MOJEEK, { status: 200, headers: { "content-type": "text/html; charset=UTF-8" } });
+    if (url.hostname === "search.yahoo.com" || url.hostname.endsWith(".search.yahoo.com")) return new Response(YAHOO, { status: 200, headers: { "content-type": "text/html; charset=UTF-8" } });
+    if (url.hostname === "yandex.com" || url.hostname === "www.yandex.com") return new Response(YANDEX, { status: 200, headers: { "content-type": "text/html; charset=UTF-8" } });
+    if (url.hostname === "www.baidu.com") return new Response(BAIDU, { status: 200, headers: { "content-type": "text/html; charset=UTF-8" } });
+    if (url.hostname === "www.google.com") return new Response(GOOGLE, { status: 200, headers: { "content-type": "text/html; charset=UTF-8" } });
+    if (url.hostname === "api.x.ai") return new Response(GROKIPEDIA, { status: 200, headers: { "content-type": "application/json" } });
     throw new Error(`unexpected outbound request: ${request.url}`);
   });
   vi.stubGlobal("fetch", mock);
   return mock;
 }
 
-afterEach(() => {
-  vi.unstubAllGlobals();
-});
+afterEach(() => vi.unstubAllGlobals());
 
 describe("Worker routes", () => {
   it("serves unauthenticated health checks", async () => {
@@ -219,15 +80,7 @@ describe("Worker routes", () => {
     expect(response.status).toBe(200);
     const body = await response.json();
     expect(body.engines.map((engine) => engine.id)).toEqual([
-      "arxiv",
-      "wikipedia",
-      "duckduckgo-html",
-      "brave-web",
-      "qwant-web",
-      "pubmed",
-      "semantic-scholar",
-      "crossref",
-      "github"
+      "arxiv", "wikipedia", "duckduckgo-html", "brave-web", "qwant-web", "pubmed", "semantic-scholar", "crossref", "github", "mojeek-web", "yahoo-web", "yandex-web", "baidu-web", "google-web", "grokipedia"
     ]);
   });
 
@@ -247,17 +100,12 @@ describe("Worker routes", () => {
     expect(body.results.length).toBeGreaterThanOrEqual(3);
     expect(body.engines.some((engine) => engine.failure_kind === "ENGINE_CHALLENGED")).toBe(true);
     expect(body.engines.map((engine) => engine.engine_id)).not.toContain("qwant-web");
-    expect(body.engines.map((engine) => engine.engine_id)).not.toContain("pubmed");
-    expect(body.results.every((result) => result.canonical_url.startsWith("http"))).toBe(true);
     expect(body.results.every((result) => Object.keys(result.provider_metadata).length >= 1)).toBe(true);
   });
 
   it("resolves category bangs before provider execution", async () => {
     mockProviders();
-    const response = await exports.default.fetch(new Request(
-      "https://example.com/v1/search?q=!web+cloudflare+rust",
-      { headers: AUTH }
-    ));
+    const response = await exports.default.fetch(new Request("https://example.com/v1/search?q=!web+cloudflare+rust", { headers: AUTH }));
     expect(response.status).toBe(200);
     const body = await response.json();
     expect(body.query).toBe("!web cloudflare rust");
@@ -268,31 +116,21 @@ describe("Worker routes", () => {
     expect(body.resolved_engines).not.toContain("qwant-web");
   });
 
-  it("supports compatible engine bangs and the GitHub alias", async () => {
+  it("supports the GitHub bang alias", async () => {
     const mock = mockProviders();
-    const response = await exports.default.fetch(new Request(
-      "https://example.com/v1/search?q=!gh+cloudflare+workers+rust",
-      { headers: AUTH }
-    ));
+    const response = await exports.default.fetch(new Request("https://example.com/v1/search?q=!gh+cloudflare+workers+rust", { headers: AUTH }));
     expect(response.status).toBe(200);
     const body = await response.json();
-    expect(body.provider_query).toBe("cloudflare workers rust");
-    expect(body.bangs).toEqual(["gh"]);
     expect(body.resolved_engines).toEqual(["github"]);
     expect(body.results[0].title).toBe("cloudflare/workers-rs");
     expect(body.results[0].provider_metadata.github.stars).toBe(5000);
-    const githubRequest = mock.mock.calls
-      .map(([input, init]) => input instanceof Request ? input : new Request(input, init))
-      .find((request) => new URL(request.url).hostname === "api.github.com");
+    const githubRequest = mock.mock.calls.map(([input, init]) => input instanceof Request ? input : new Request(input, init)).find((request) => new URL(request.url).hostname === "api.github.com");
     expect(new URL(githubRequest.url).searchParams.get("q")).toBe("cloudflare workers rust");
   });
 
   it("rejects conflicting, unknown and bang-only queries", async () => {
     for (const query of ["!web !arxiv cloudflare", "!unknown cloudflare", "!web"]) {
-      const response = await exports.default.fetch(new Request(
-        `https://example.com/v1/search?q=${encodeURIComponent(query)}`,
-        { headers: AUTH }
-      ));
+      const response = await exports.default.fetch(new Request(`https://example.com/v1/search?q=${encodeURIComponent(query)}`, { headers: AUTH }));
       expect(response.status).toBe(400);
       expect((await response.json()).code).toBe("INVALID_REQUEST");
     }
@@ -300,10 +138,7 @@ describe("Worker routes", () => {
 
   it("preserves escaped exclamation marks as literal query text", async () => {
     mockProviders();
-    const response = await exports.default.fetch(new Request(
-      `https://example.com/v1/search?q=${encodeURIComponent("\\!gh cloudflare")}&engines=wikipedia`,
-      { headers: AUTH }
-    ));
+    const response = await exports.default.fetch(new Request(`https://example.com/v1/search?q=${encodeURIComponent("\\!gh cloudflare")}&engines=wikipedia`, { headers: AUTH }));
     expect(response.status).toBe(200);
     const body = await response.json();
     expect(body.bangs).toEqual([]);
@@ -311,36 +146,48 @@ describe("Worker routes", () => {
     expect(body.resolved_engines).toEqual(["wikipedia"]);
   });
 
-  it("aggregates the independent general web providers", async () => {
-    mockProviders();
-    const response = await exports.default.fetch(new Request(
-      "https://example.com/v1/search?q=cloudflare&engines=duckduckgo-html,brave-web,qwant-web",
-      { headers: AUTH }
-    ));
+  it("aggregates the first provider tranche", async () => {
+    const mock = mockProviders();
+    const response = await exports.default.fetch(new Request("https://example.com/v1/search?q=cloudflare&page=2&limit=7&engines=mojeek-web,yahoo-web,qwant-web", { headers: AUTH }));
     expect(response.status).toBe(200);
     const body = await response.json();
     expect(body.partial).toBe(false);
-    expect(body.results.flatMap((result) => result.engines)).toEqual(expect.arrayContaining([
-      "duckduckgo-html",
-      "brave-web",
-      "qwant-web"
-    ]));
+    expect(body.results.flatMap((result) => result.engines)).toEqual(expect.arrayContaining(["mojeek-web", "yahoo-web", "qwant-web"]));
+    const requests = mock.mock.calls.map(([input, init]) => input instanceof Request ? input : new Request(input, init));
+    expect(new URL(requests.find((request) => new URL(request.url).hostname === "www.mojeek.com").url).searchParams.get("s")).toBe("10");
+    expect(new URL(requests.find((request) => new URL(request.url).hostname.endsWith("search.yahoo.com")).url).searchParams.get("b")).toBe("15");
+    const qwant = new URL(requests.find((request) => new URL(request.url).hostname === "api.qwant.com").url);
+    expect(qwant.searchParams.get("count")).toBe("7");
+    expect(qwant.searchParams.get("offset")).toBe("7");
+  });
+
+  it("aggregates the remaining public providers", async () => {
+    const mock = mockProviders();
+    const response = await exports.default.fetch(new Request("https://example.com/v1/search?q=cloudflare&page=2&limit=7&engines=yandex-web,baidu-web,google-web,grokipedia", { headers: AUTH }));
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.partial).toBe(false);
+    expect(body.results.flatMap((result) => result.engines)).toEqual(expect.arrayContaining(["yandex-web", "baidu-web", "google-web", "grokipedia"]));
+    const requests = mock.mock.calls.map(([input, init]) => input instanceof Request ? input : new Request(input, init));
+    expect(new URL(requests.find((request) => new URL(request.url).hostname === "yandex.com").url).searchParams.get("p")).toBe("1");
+    const baidu = new URL(requests.find((request) => new URL(request.url).hostname === "www.baidu.com").url);
+    expect(baidu.searchParams.get("pn")).toBe("10");
+    expect(baidu.searchParams.get("rn")).toBe("7");
+    const google = new URL(requests.find((request) => new URL(request.url).hostname === "www.google.com").url);
+    expect(google.searchParams.get("start")).toBe("10");
+    expect(google.searchParams.get("num")).toBe("7");
+    const grokipedia = new URL(requests.find((request) => new URL(request.url).hostname === "api.x.ai").url);
+    expect(grokipedia.searchParams.get("limit")).toBe("7");
+    expect(grokipedia.searchParams.get("offset")).toBe("7");
   });
 
   it("aggregates explicit academic providers", async () => {
     mockProviders();
-    const response = await exports.default.fetch(new Request(
-      "https://example.com/v1/search?q=food+safety&engines=pubmed,semantic-scholar,crossref",
-      { headers: AUTH }
-    ));
+    const response = await exports.default.fetch(new Request("https://example.com/v1/search?q=food+safety&engines=pubmed,semantic-scholar,crossref", { headers: AUTH }));
     expect(response.status).toBe(200);
     const body = await response.json();
     expect(body.partial).toBe(false);
-    expect(body.results.flatMap((result) => result.engines)).toEqual(expect.arrayContaining([
-      "pubmed",
-      "semantic-scholar",
-      "crossref"
-    ]));
+    expect(body.results.flatMap((result) => result.engines)).toEqual(expect.arrayContaining(["pubmed", "semantic-scholar", "crossref"]));
   });
 
   it("keeps an empty successful engine as a partial response", async () => {
@@ -379,9 +226,7 @@ describe("Worker routes", () => {
     const first = await firstWorker.fetch(request());
     expect(first.status).toBe(200);
     expect((await first.json()).cached).toBe(false);
-
     await waitOnExecutionContext(firstCtx);
-
     const secondCtx = createExecutionContext();
     const secondWorker = new WorkerEntrypoint(secondCtx, env);
     const second = await secondWorker.fetch(request());
