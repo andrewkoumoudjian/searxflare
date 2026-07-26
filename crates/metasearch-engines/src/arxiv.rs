@@ -4,7 +4,7 @@ use metasearch_core::{
     ProviderResult, SearchEngine, SourceKind, StatePolicy, DEFAULT_ENGINE_TIMEOUT_MS,
     DEFAULT_MAX_BODY_BYTES, DEFAULT_MAX_REDIRECTS, DEFAULT_MAX_STEPS,
 };
-use metasearch_parsers::parse_arxiv_atom;
+use metasearch_parsers::{parse_arxiv_atom, ParserError};
 use serde_json::{json, Map};
 use std::collections::BTreeMap;
 use url::Url;
@@ -30,7 +30,7 @@ pub static DESCRIPTOR: EngineDescriptor = EngineDescriptor {
     max_steps: DEFAULT_MAX_STEPS,
     max_redirects: DEFAULT_MAX_REDIRECTS,
     weight: 1.25,
-    parser_version: "arxiv-atom-v1",
+    parser_version: "arxiv-atom-v2",
     default_enabled: true,
     allow_http: false,
     state_policy: StatePolicy::Stateless,
@@ -40,6 +40,65 @@ pub static DESCRIPTOR: EngineDescriptor = EngineDescriptor {
     },
     bot_auth_policy: BotAuthPolicy::Disabled,
 };
+
+fn arxiv_search_query(text: &str) -> Result<String, EngineFailure> {
+    let terms = text
+        .split_whitespace()
+        .filter_map(|term| {
+            let cleaned: String = term
+                .chars()
+                .map(|character| match character {
+                    '"' | '\\' => ' ',
+                    other => other,
+                })
+                .collect();
+            let cleaned = cleaned.trim();
+            (!cleaned.is_empty()).then(|| format!("all:\"{cleaned}\""))
+        })
+        .collect::<Vec<_>>();
+
+    if terms.is_empty() {
+        return Err(EngineFailure::new(
+            DESCRIPTOR.id,
+            FailureKind::InvalidRequest,
+            "query does not contain an arXiv-searchable term",
+        ));
+    }
+    Ok(terms.join(" AND "))
+}
+
+fn build_request(query: &NormalizedQuery) -> Result<EngineRequest, EngineFailure> {
+    let page_size = u32::from(query.limit);
+    let start = query
+        .page_number()
+        .saturating_sub(1)
+        .saturating_mul(page_size);
+    let mut url = Url::parse("https://export.arxiv.org/api/query").map_err(|error| {
+        EngineFailure::new(DESCRIPTOR.id, FailureKind::Internal, error.to_string())
+    })?;
+    url.query_pairs_mut()
+        .append_pair("search_query", &arxiv_search_query(&query.text)?)
+        .append_pair("start", &start.to_string())
+        .append_pair("max_results", &page_size.to_string());
+
+    Ok(EngineRequest {
+        method: EngineMethod::Get,
+        url,
+        headers: BTreeMap::from([
+            (
+                "accept".into(),
+                "application/atom+xml, application/xml;q=0.9".into(),
+            ),
+            (
+                "user-agent".into(),
+                "searxflare/0.1 (+https://github.com/andrewkoumoudjian/searxflare)".into(),
+            ),
+        ]),
+        cookies: BTreeMap::new(),
+        body: None,
+        accepted_content_types: &["application/atom+xml", "application/xml", "text/xml"],
+    })
+}
 
 #[async_trait::async_trait(?Send)]
 impl SearchEngine for ArxivEngine {
@@ -52,41 +111,17 @@ impl SearchEngine for ArxivEngine {
         query: &NormalizedQuery,
         context: &EngineContext<'_>,
     ) -> Result<EngineOutput, EngineFailure> {
-        let start = query.page_number().saturating_sub(1).saturating_mul(10);
-        let mut url = Url::parse("https://export.arxiv.org/api/query").map_err(|error| {
-            EngineFailure::new(DESCRIPTOR.id, FailureKind::Internal, error.to_string())
-        })?;
-        url.query_pairs_mut()
-            .append_pair("search_query", &format!("all:{}", query.text))
-            .append_pair("start", &start.to_string())
-            .append_pair("max_results", "10");
-        let request = EngineRequest {
-            method: EngineMethod::Get,
-            url,
-            headers: BTreeMap::from([
-                (
-                    "accept".into(),
-                    "application/atom+xml, application/xml;q=0.9".into(),
-                ),
-                (
-                    "user-agent".into(),
-                    "searxflare/0.1 (+https://github.com/andrewkoumoudjian/searxflare)".into(),
-                ),
-            ]),
-            cookies: BTreeMap::new(),
-            body: None,
-            accepted_content_types: &["application/atom+xml", "application/xml", "text/xml"],
-        };
+        let request = build_request(query)?;
         let response = context
             .http
             .send(&DESCRIPTOR, request, context.deadline)
             .await?;
         let records = parse_arxiv_atom(&response.body).map_err(|error| {
-            EngineFailure::new(
-                DESCRIPTOR.id,
-                FailureKind::EngineParseFailed,
-                error.to_string(),
-            )
+            let kind = match error {
+                ParserError::ProviderError(_) => FailureKind::InvalidRequest,
+                _ => FailureKind::EngineParseFailed,
+            };
+            EngineFailure::new(DESCRIPTOR.id, kind, error.to_string())
         })?;
         let results = records
             .into_iter()
@@ -120,5 +155,43 @@ impl SearchEngine for ArxivEngine {
             parse_ms: 0,
             redirect_count: response.redirect_count,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use metasearch_core::{RankingStrategy, SafeSearch};
+
+    fn query() -> NormalizedQuery {
+        NormalizedQuery {
+            text: "cloudflare rust".into(),
+            engines: Vec::new(),
+            categories: Vec::new(),
+            page: Some(2),
+            cursor: None,
+            limit: 7,
+            locale: None,
+            country: None,
+            safe_search: SafeSearch::Moderate,
+            time_range: None,
+            ranking: RankingStrategy::RrfV1,
+            timeout_ms: 5_000,
+        }
+    }
+
+    #[test]
+    fn qualifies_each_query_term_and_respects_page_size() {
+        let request = build_request(&query()).unwrap();
+        let parameters: BTreeMap<_, _> = request.url.query_pairs().into_owned().collect();
+        assert_eq!(
+            parameters.get("search_query").map(String::as_str),
+            Some("all:\"cloudflare\" AND all:\"rust\"")
+        );
+        assert_eq!(parameters.get("start").map(String::as_str), Some("7"));
+        assert_eq!(
+            parameters.get("max_results").map(String::as_str),
+            Some("7")
+        );
     }
 }
