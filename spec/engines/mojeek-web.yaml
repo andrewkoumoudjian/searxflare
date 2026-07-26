@@ -1,0 +1,26 @@
+id: mojeek-web
+display_name: Mojeek Web
+endpoint: https://www.mojeek.com/search
+method: GET
+categories: [general]
+source_kind: html
+allowed_hosts: [www.mojeek.com]
+capabilities:
+  paging: true
+  locale: true
+  country: true
+  safe_search: true
+  time_range: true
+limits:
+  timeout_ms: 3500
+  max_body_bytes: 2097152
+  max_steps: 3
+  max_redirects: 2
+versions:
+  parser: mojeek-web-html-v1
+cache:
+  response_ttl_seconds: 180
+  negative_ttl_seconds: 30
+state: stateless
+default_enabled: false
+notes: Clean-room Rust implementation informed by the current SearXNG Mojeek engine and Mojeek search parameter documentation. Uses bounded q, safe, optional s and since parameters plus fixed language and region cookies. HTML parsing uses the repository's streaming lol-html selector parser with explicit changed-layout detection. Default-disabled until Cloudflare preview egress is validated.
