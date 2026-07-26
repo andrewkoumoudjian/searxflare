@@ -1,0 +1,24 @@
+{
+  "status": "ok",
+  "message-type": "work-list",
+  "message": {
+    "items": [
+      {
+        "DOI": "10.1234/example.2026.1",
+        "URL": "https://doi.org/10.1234/example.2026.1",
+        "title": ["Cloudflare Workers research"],
+        "abstract": "<jats:p>Serverless Rust &amp; academic metasearch.</jats:p>",
+        "author": [
+          {"given": "Ada", "family": "Example"},
+          {"given": "Grace", "family": "Researcher"}
+        ],
+        "published": {"date-parts": [[2026, 7, 1]]},
+        "container-title": ["Journal of Edge Research"],
+        "type": "journal-article",
+        "publisher": "Example Press",
+        "is-referenced-by-count": 12,
+        "subject": ["Computer Science"]
+      }
+    ]
+  }
+}
