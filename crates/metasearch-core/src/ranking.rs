@@ -94,7 +94,10 @@ fn token_coverage(query_tokens: &BTreeSet<String>, haystack: &str) -> f64 {
 fn publication_year(value: Option<&str>) -> Option<i32> {
     let value = value?;
     let prefix = value.get(..4)?;
-    prefix.parse().ok().filter(|year| (1000..=9999).contains(year))
+    prefix
+        .parse()
+        .ok()
+        .filter(|year| (1000..=9999).contains(year))
 }
 
 fn freshness_bonus(result: &NormalizedResult, newest_year: Option<i32>) -> f64 {
