@@ -279,7 +279,7 @@ mod tests {
         assert_eq!(parameters.get("safe").map(String::as_str), Some("1"));
         assert_eq!(request.cookies.get("lb").map(String::as_str), Some("fr"));
         assert_eq!(request.cookies.get("arc").map(String::as_str), Some("CA"));
-        assert_eq!(since_date_at(TimeRange::Month, 20_300), "20250731");
+        assert_eq!(since_date_at(TimeRange::Month, 20_300), "20250630");
     }
 
     #[test]
