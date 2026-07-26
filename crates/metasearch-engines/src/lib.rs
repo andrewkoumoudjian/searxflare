@@ -3,6 +3,7 @@ mod bangs;
 mod brave;
 mod crossref;
 mod duckduckgo_html;
+mod github;
 mod pubmed;
 mod qwant;
 mod registry;
