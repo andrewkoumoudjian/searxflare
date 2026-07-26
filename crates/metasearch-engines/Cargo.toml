@@ -9,7 +9,6 @@ repository.workspace = true
 [dependencies]
 async-trait.workspace = true
 futures-util.workspace = true
-js-sys.workspace = true
 metasearch-core = { path = "../metasearch-core" }
 metasearch-parsers = { path = "../metasearch-parsers" }
 serde.workspace = true
