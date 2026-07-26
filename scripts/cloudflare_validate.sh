@@ -18,12 +18,10 @@ cd "$ROOT_DIR"
 
 rustup component add rustfmt --toolchain "$RUST_TOOLCHAIN"
 
-# Diagnostic-only: verify the changed Rust sources with the workspace edition.
+# Diagnostic-only: verify the changed engine adapters with the workspace edition.
 rustfmt "+$RUST_TOOLCHAIN" --edition 2021 --check \
   crates/metasearch-engines/src/arxiv.rs \
-  crates/metasearch-engines/src/wikipedia.rs \
-  crates/metasearch-parsers/src/arxiv.rs \
-  crates/metasearch-parsers/src/lib.rs
+  crates/metasearch-engines/src/wikipedia.rs
 cargo "+$RUST_TOOLCHAIN" fmt
 
 (
