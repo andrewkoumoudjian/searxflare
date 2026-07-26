@@ -1,0 +1,26 @@
+id: pubmed
+display_name: PubMed
+endpoint: https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi
+method: GET
+categories: [academic]
+source_kind: json
+allowed_hosts: [eutils.ncbi.nlm.nih.gov]
+capabilities:
+  paging: true
+  locale: false
+  country: false
+  safe_search: false
+  time_range: false
+limits:
+  timeout_ms: 2500
+  max_body_bytes: 2097152
+  max_steps: 2
+  max_redirects: 2
+versions:
+  parser: pubmed-eutils-json-v1
+cache:
+  response_ttl_seconds: 900
+  negative_ttl_seconds: 30
+state: stateless
+default_enabled: false
+notes: Uses the public NCBI EUtils ESearch and ESummary JSON endpoints as a bounded two-step pipeline. It preserves PMID, DOI, PMCID, authors, journal, publication type and publication date metadata.

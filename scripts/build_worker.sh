@@ -33,5 +33,11 @@ fi
 
 cd "$ROOT_DIR"
 cargo "+$RUST_TOOLCHAIN" metadata --locked --no-deps --format-version 1 >/dev/null
+
+if [[ "${WORKERS_CI:-}" == "1" \
+  && "${SEARXFLARE_SKIP_CLOUDFLARE_VALIDATION:-}" != "1" ]]; then
+  exec bash "$ROOT_DIR/scripts/cloudflare_validate.sh"
+fi
+
 cd "$ROOT_DIR/crates/metasearch-worker"
 exec worker-build --release

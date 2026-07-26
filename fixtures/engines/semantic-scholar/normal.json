@@ -1,0 +1,28 @@
+{
+  "total": 1,
+  "offset": 0,
+  "next": 1,
+  "data": [
+    {
+      "paperId": "abcdef123456",
+      "externalIds": {"DOI": "10.1234/semantic.example", "ArXiv": "2607.00001"},
+      "url": "https://www.semanticscholar.org/paper/abcdef123456",
+      "title": "Cloudflare Workers for academic search",
+      "abstract": "A bounded serverless metasearch architecture.",
+      "venue": "Edge Systems Conference",
+      "year": 2026,
+      "publicationDate": "2026-07-02",
+      "citationCount": 8,
+      "influentialCitationCount": 2,
+      "isOpenAccess": true,
+      "openAccessPdf": {"url": "https://example.org/paper.pdf", "status": "GREEN"},
+      "fieldsOfStudy": ["Computer Science"],
+      "publicationTypes": ["Conference"],
+      "journal": {"name": "Edge Systems", "volume": "1"},
+      "authors": [
+        {"authorId": "1", "name": "Ada Example"},
+        {"authorId": "2", "name": "Grace Researcher"}
+      ]
+    }
+  ]
+}

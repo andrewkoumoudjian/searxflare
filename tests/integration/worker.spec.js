@@ -58,6 +58,59 @@ const QWANT = JSON.stringify({
   }
 });
 
+const PUBMED_SEARCH = JSON.stringify({
+  esearchresult: { idlist: ["12345678"] }
+});
+
+const PUBMED_SUMMARY = JSON.stringify({
+  result: {
+    uids: ["12345678"],
+    "12345678": {
+      title: "Food safety and Worker systems",
+      sortpubdate: "2026/06/15 00:00",
+      source: "J Edge Med",
+      fulljournalname: "Journal of Edge Medicine",
+      authors: [{ name: "Ada Example" }],
+      pubtype: ["Journal Article"],
+      articleids: [{ idtype: "doi", value: "10.1234/pubmed.example" }]
+    }
+  }
+});
+
+const SEMANTIC_SCHOLAR = JSON.stringify({
+  total: 1,
+  offset: 0,
+  data: [
+    {
+      paperId: "abcdef123456",
+      url: "https://www.semanticscholar.org/paper/abcdef123456",
+      title: "Semantic Scholar result",
+      abstract: "Academic graph result.",
+      publicationDate: "2026-07-02",
+      authors: [{ authorId: "1", name: "Grace Researcher" }],
+      externalIds: { DOI: "10.1234/semantic.example" },
+      citationCount: 8
+    }
+  ]
+});
+
+const CROSSREF = JSON.stringify({
+  status: "ok",
+  message: {
+    items: [
+      {
+        DOI: "10.1234/crossref.example",
+        URL: "https://doi.org/10.1234/crossref.example",
+        title: ["Crossref result"],
+        abstract: "<jats:p>Crossref academic result.</jats:p>",
+        author: [{ given: "Katherine", family: "Example" }],
+        published: { "date-parts": [[2026, 7, 1]] },
+        "container-title": ["Journal of Edge Research"]
+      }
+    ]
+  }
+});
+
 function mockProviders({ duckFailure = false, delayArxiv = false, emptyWikipedia = false } = {}) {
   const mock = vi.fn(async (input, init) => {
     const request = input instanceof Request ? input : new Request(input, init);
@@ -87,6 +140,16 @@ function mockProviders({ duckFailure = false, delayArxiv = false, emptyWikipedia
     }
     if (url.hostname === "api.qwant.com") {
       return new Response(QWANT, { status: 200, headers: { "content-type": "application/json" } });
+    }
+    if (url.hostname === "eutils.ncbi.nlm.nih.gov") {
+      const body = url.pathname.endsWith("/esearch.fcgi") ? PUBMED_SEARCH : PUBMED_SUMMARY;
+      return new Response(body, { status: 200, headers: { "content-type": "application/json" } });
+    }
+    if (url.hostname === "api.semanticscholar.org") {
+      return new Response(SEMANTIC_SCHOLAR, { status: 200, headers: { "content-type": "application/json" } });
+    }
+    if (url.hostname === "api.crossref.org") {
+      return new Response(CROSSREF, { status: 200, headers: { "content-type": "application/json" } });
     }
     throw new Error(`unexpected outbound request: ${request.url}`);
   });
@@ -123,7 +186,10 @@ describe("Worker routes", () => {
       "wikipedia",
       "duckduckgo-html",
       "brave-web",
-      "qwant-web"
+      "qwant-web",
+      "pubmed",
+      "semantic-scholar",
+      "crossref"
     ]);
   });
 
@@ -142,6 +208,7 @@ describe("Worker routes", () => {
     expect(body.results.length).toBeGreaterThanOrEqual(3);
     expect(body.engines.some((engine) => engine.failure_kind === "ENGINE_CHALLENGED")).toBe(true);
     expect(body.engines.map((engine) => engine.engine_id)).not.toContain("qwant-web");
+    expect(body.engines.map((engine) => engine.engine_id)).not.toContain("pubmed");
     expect(body.results.every((result) => result.canonical_url.startsWith("http"))).toBe(true);
   });
 
@@ -158,6 +225,22 @@ describe("Worker routes", () => {
       "duckduckgo-html",
       "brave-web",
       "qwant-web"
+    ]));
+  });
+
+  it("aggregates explicit academic providers", async () => {
+    mockProviders();
+    const response = await exports.default.fetch(new Request(
+      "https://example.com/v1/search?q=food+safety&engines=pubmed,semantic-scholar,crossref",
+      { headers: AUTH }
+    ));
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.partial).toBe(false);
+    expect(body.results.flatMap((result) => result.engines)).toEqual(expect.arrayContaining([
+      "pubmed",
+      "semantic-scholar",
+      "crossref"
     ]));
   });
 

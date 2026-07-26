@@ -1,0 +1,24 @@
+{
+  "header": {"type": "esummary", "version": "0.3"},
+  "result": {
+    "uids": ["12345678"],
+    "12345678": {
+      "uid": "12345678",
+      "pubdate": "2026 Jun 15",
+      "sortpubdate": "2026/06/15 00:00",
+      "source": "J Edge Med",
+      "fulljournalname": "Journal of Edge Medicine",
+      "authors": [
+        {"name": "Example A", "authtype": "Author"},
+        {"name": "Researcher G", "authtype": "Author"}
+      ],
+      "title": "Food safety and <b>Worker</b> systems",
+      "pubtype": ["Journal Article"],
+      "articleids": [
+        {"idtype": "pubmed", "value": "12345678"},
+        {"idtype": "doi", "value": "10.1234/pubmed.example"},
+        {"idtype": "pmc", "value": "PMC123456"}
+      ]
+    }
+  }
+}
