@@ -1,9 +1,9 @@
 id: wikipedia
 display_name: Wikipedia
-endpoint: https://en.wikipedia.org/w/index.php
+endpoint: https://en.wikipedia.org/w/api.php
 method: GET
 categories: [reference]
-source_kind: html
+source_kind: json
 allowed_hosts: [en.wikipedia.org, fr.wikipedia.org, de.wikipedia.org, es.wikipedia.org]
 capabilities:
   paging: true
@@ -12,15 +12,15 @@ capabilities:
   safe_search: false
   time_range: false
 limits:
-  timeout_ms: 3500
+  timeout_ms: 2500
   max_body_bytes: 2097152
   max_steps: 3
   max_redirects: 2
 versions:
-  parser: wikipedia-html-v1
+  parser: wikipedia-action-json-v1
 cache:
   response_ttl_seconds: 1800
   negative_ttl_seconds: 30
 state: stateless
 default_enabled: true
-notes: Uses Special:Search HTML with fulltext=1, ns0=1, limit=10 and numeric offset. Locale selection is restricted to the four compile-time hosts; unsupported locales fall back to English.
+notes: Uses the MediaWiki Action API with generator=search, namespace 0, bounded limit/offset, plaintext introductory extracts, canonical page URLs and optional thumbnails. Locale selection is restricted to the four compile-time hosts; unsupported locales fall back to English.
