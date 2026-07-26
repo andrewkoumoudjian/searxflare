@@ -13,6 +13,8 @@ Paste only the lowercase hash, not the raw key. Configure optional Analytics Eng
 
 The repository is self-contained for Cloudflare's Git integration. `scripts/build_worker.sh` reads the pinned toolchain from `rust-toolchain.toml`, installs Rust through the official rustup installer when the build image does not provide it, adds `wasm32-unknown-unknown`, installs `worker-build` 0.8.5 when absent, validates `Cargo.lock`, and builds `metasearch-worker`.
 
+When Cloudflare injects `WORKERS_CI=1`, the build script delegates to `scripts/cloudflare_validate.sh`. That release gate runs formatting, Clippy, native Rust tests, the direct Wasm workspace build, OpenAPI and engine-manifest validation, workerd integration tests, a recursion-guarded Wrangler dry run, and the bundle-size limit before the preview or production upload continues.
+
 Use these Worker build settings from the repository root:
 
 ```text
@@ -36,7 +38,7 @@ npm run bundle
 npx wrangler deploy
 ```
 
-The CI and Cloudflare validation paths additionally run formatting, Clippy, native Rust tests, the direct Wasm build, schema validation, workerd integration tests and the bundle-size guard.
+GitHub Actions and Workers Builds both run formatting, Clippy, native Rust tests, the direct Wasm build, schema validation, workerd integration tests and the bundle-size guard. Workers Builds also proves that the exact Git head can be uploaded by the configured Cloudflare deployment path.
 
 ## Post-deployment verification
 
@@ -44,7 +46,7 @@ Verify:
 
 1. `GET /healthz` returns `200` without authentication.
 2. `GET /readyz` returns `200` only when `API_KEY_SHA256` is configured.
-3. The authenticated engine catalogue returns the three compiled engines.
+3. The authenticated engine catalogue returns the eight compiled engines.
 4. Each single-engine debug route returns results or a classified provider failure.
 5. A default authenticated search returns a deterministic JSON response.
 6. A deliberate provider failure produces a partial result when another engine succeeds.
