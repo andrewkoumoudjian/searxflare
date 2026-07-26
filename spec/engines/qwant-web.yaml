@@ -17,10 +17,10 @@ limits:
   max_steps: 3
   max_redirects: 2
 versions:
-  parser: qwant-web-json-v1
+  parser: qwant-web-json-v2
 cache:
   response_ttl_seconds: 180
   negative_ttl_seconds: 30
 state: stateless
 default_enabled: false
-notes: Clean-room Rust implementation informed by SearXNG searx/engines/qwant.py at 0909dbc9efb2c6e93e2ad51e60e66417ab291710. Uses the fixed public frontend JSON endpoint with bounded paging, locale, safe-search and explicit challenge or rate-limit classification. Cloudflare preview egress was challenged on 2026-07-25, so the provider remains explicit opt-in until a non-bypass, tested state path is available.
+notes: Clean-room Rust implementation informed by the current SearXNG Qwant engine. Uses the fixed public frontend JSON endpoint with the caller's bounded result limit, matching page offsets, locale, safe-search and explicit challenge or rate-limit classification. Cloudflare preview egress was challenged on 2026-07-25, so the provider remains explicit opt-in without bypass behavior.
