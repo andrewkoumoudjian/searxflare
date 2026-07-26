@@ -17,10 +17,10 @@ limits:
   max_steps: 3
   max_redirects: 2
 versions:
-  parser: arxiv-atom-v1
+  parser: arxiv-atom-v2
 cache:
   response_ttl_seconds: 1800
   negative_ttl_seconds: 30
 state: stateless
 default_enabled: true
-notes: Uses search_query=all:<query>, start=(page-1)*10 and max_results=10. Preserves paper metadata from Atom and arXiv namespace elements.
+notes: Qualifies each whitespace-delimited term as an all-field phrase joined with AND, uses start=(page-1)*limit and max_results=limit, and explicitly surfaces Atom error entries before mapping paper metadata.

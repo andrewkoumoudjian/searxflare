@@ -14,13 +14,15 @@ The canonical system design is [`architecture.md`](architecture.md). Public cont
 - restricted HTTPS-only outbound transport with host allow-lists, manual redirects, deadlines, bounded bodies, content-type checks and challenge classification
 - Cache API for aggregate, per-engine and negative responses
 - stateless and KV engine-state adapters plus a Durable Object coordinator contract
-- arXiv Atom, Wikipedia HTML, DuckDuckGo HTML, Brave Web HTML, Qwant Web JSON, PubMed JSON, Semantic Scholar JSON and Crossref JSON adapters
+- arXiv Atom, Wikipedia Action API JSON, DuckDuckGo HTML, Brave Web HTML, Qwant Web JSON, PubMed JSON, Semantic Scholar JSON and Crossref JSON adapters
 - four default-enabled adapters, including DuckDuckGo and Brave as independent general-web providers
 - Unicode NFC query normalisation, URL canonicalisation, exact canonical-URL deduplication
 - `rrf-v1` and `searx-compat-v1` ranking
 - structured logs and optional Analytics Engine events
 
 Brave completes the canonical architecture's Milestone 5 default provider-diversity goal. Qwant is implemented and available for explicit requests, but remains default-disabled because its public frontend challenged Cloudflare preview egress during delivery validation. Each provider has a fixed host allow-list, bounded request construction, fixture-backed parsing and independent partial-failure semantics. Their public frontend contracts remain provider-controlled and may change without notice.
+
+arXiv uses its official Atom API with provider-safe multi-term query construction and explicit Atom error detection. Wikipedia uses the official MediaWiki Action API rather than the human Special:Search HTML surface, avoiding frontend challenge pages while preserving bounded paging, locale selection, extracts, canonical URLs and thumbnails.
 
 PubMed, Semantic Scholar and Crossref add explicit academic search without changing the default general-web fan-out. They are default-disabled so callers opt into their provider-specific latency and rate-limit profiles. PubMed uses a bounded two-request ESearch-to-ESummary flow; Semantic Scholar and Crossref each use one JSON request.
 

@@ -18,14 +18,22 @@ const ARXIV = `<?xml version="1.0" encoding="UTF-8"?>
   </entry>
 </feed>`;
 
-const WIKIPEDIA = `<!doctype html><html><body><ul class="mw-search-results">
-<li class="mw-search-result"><div class="mw-search-result-heading"><a href="/wiki/Cloudflare">Cloudflare</a></div><div class="searchresult">Reference result.</div></li>
-</ul></body></html>`;
+const WIKIPEDIA = JSON.stringify({
+  batchcomplete: true,
+  query: {
+    pages: [
+      {
+        pageid: 42,
+        ns: 0,
+        title: "Cloudflare",
+        extract: "Reference result.",
+        fullurl: "https://en.wikipedia.org/wiki/Cloudflare"
+      }
+    ]
+  }
+});
 
-const EMPTY_WIKIPEDIA = `<!doctype html><html><body>
-<div class="mw-search-nonefound">There were no results matching the query.</div>
-<ul class="mw-search-results"></ul>
-</body></html>`;
+const EMPTY_WIKIPEDIA = JSON.stringify({ batchcomplete: true });
 
 const DUCKDUCKGO = `<!doctype html><html><body><div id="links">
 <div class="web-result"><h2><a href="https://duckduckgo.com/l/?uddg=https%3A%2F%2Fexample.com%2Fcloudflare">Example result</a></h2><a class="result__snippet">Web result.</a></div>
@@ -126,7 +134,7 @@ function mockProviders({ duckFailure = false, delayArxiv = false, emptyWikipedia
     if (url.hostname.endsWith("wikipedia.org")) {
       return new Response(emptyWikipedia ? EMPTY_WIKIPEDIA : WIKIPEDIA, {
         status: 200,
-        headers: { "content-type": "text/html; charset=UTF-8" }
+        headers: { "content-type": "application/json; charset=UTF-8" }
       });
     }
     if (url.hostname === "html.duckduckgo.com") {

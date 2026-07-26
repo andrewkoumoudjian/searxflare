@@ -18,14 +18,18 @@ These sources were used to confirm the Worker Fetch execution model, preview dep
 
 Upstream repository: https://github.com/searxng/searxng
 
-Reference commit: `0909dbc9efb2c6e93e2ad51e60e66417ab291710`
+Reference commits:
+
+- `0909dbc9efb2c6e93e2ad51e60e66417ab291710`
+- `6d8b55028063d2c36dd1b95d43ef1ebf82580698`
 
 Files consulted:
 
+- `searx/engines/arxiv.py`
 - `searx/engines/brave.py`
 - `searx/engines/qwant.py`
 
-The reference was used to identify public frontend endpoints, stable query parameters, cookie names, result containers, paging limits, safe-search mapping, locale handling, and provider error shapes. Searxflare does not copy SearXNG control flow or Python implementation. The Rust adapters use the repository's own engine traits, restricted transport, bounded parsers, failure taxonomy, caching, ranking, and `wasm32-unknown-unknown` constraints.
+The reference was used to identify public endpoints, stable query parameters, result containers, paging limits, safe-search mapping, locale handling, provider error shapes, and arXiv namespace handling. Searxflare does not copy SearXNG control flow or Python implementation. The Rust adapters use the repository's own engine traits, restricted transport, bounded parsers, failure taxonomy, caching, ranking, and `wasm32-unknown-unknown` constraints.
 
 SearXNG is AGPL-3.0-or-later. These notes preserve provenance and make the clean-room behavioral adaptation explicit. See `spec/licensing.md` for the repository's licensing policy.
 
@@ -36,12 +40,21 @@ SearXNG is AGPL-3.0-or-later. These notes preserve provenance and make the clean
 
 Neither surface is a supported public API contract. Provider behavior can change, rate-limit, challenge, or deny Cloudflare egress. The implementation does not bypass those controls; failures remain isolated and observable.
 
-## Academic provider APIs
+## Official reference and academic APIs
 
+- arXiv API user manual: https://info.arxiv.org/help/api/user-manual.html
+- MediaWiki Action API overview: https://www.mediawiki.org/wiki/API:Action_API
+- MediaWiki search module: https://www.mediawiki.org/wiki/API:Search
+- MediaWiki API etiquette: https://www.mediawiki.org/wiki/API:Etiquette
+- Wikimedia API access policy: https://www.mediawiki.org/wiki/Wikimedia_APIs/Access_policy
 - NCBI E-utilities usage and ESearch/ESummary flow: https://www.ncbi.nlm.nih.gov/books/NBK25500/
 - Semantic Scholar Academic Graph API: https://api.semanticscholar.org/api-docs/graph
 - Crossref REST API: https://crossref.gitlab.io/rest-api-doc/
 - OpenAlex API overview and authentication: https://developers.openalex.org/
+
+The arXiv manual defines field-qualified Boolean query construction, bounded `start`/`max_results` paging, Atom output, and error responses represented as single Atom entries. Searxflare now qualifies each user term, detects error entries before requiring paper-only fields such as `published`, and preserves upstream error details.
+
+The MediaWiki documentation identifies `/w/api.php` as the programmatic Action API endpoint, supports search as a generator, recommends JSON for new clients, and requires a meaningful client identifier. Wikipedia now uses one bounded generator request for page extracts, canonical URLs and optional thumbnails instead of the human Special:Search HTML surface.
 
 PubMed uses a bounded ESearch JSON request followed by ESummary JSON only when IDs are returned. Semantic Scholar uses relevance-ranked paper search with explicit fields and bounded offset/limit. Crossref uses the public works search with a bounded `query.bibliographic`, rows and offset. All three are default-disabled so callers opt into their latency and public rate-limit profiles.
 

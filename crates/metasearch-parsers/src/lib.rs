@@ -14,6 +14,7 @@ pub enum ParserError {
     InvalidXml(String),
     InvalidHtml(String),
     InvalidUrl(String),
+    ProviderError(String),
     SourceTooLarge,
     NestingTooDeep,
     EmbeddedDataNotFound,
@@ -27,6 +28,7 @@ impl Display for ParserError {
             Self::InvalidXml(message) => write!(formatter, "invalid XML: {message}"),
             Self::InvalidHtml(message) => write!(formatter, "invalid HTML: {message}"),
             Self::InvalidUrl(message) => write!(formatter, "invalid URL: {message}"),
+            Self::ProviderError(message) => write!(formatter, "provider error: {message}"),
             Self::SourceTooLarge => {
                 formatter.write_str("embedded source exceeds the configured limit")
             }
