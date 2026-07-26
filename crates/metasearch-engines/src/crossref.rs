@@ -119,7 +119,10 @@ fn author_names(item: &Value) -> Vec<String> {
         .into_iter()
         .flatten()
         .filter_map(|author| {
-            let given = author.get("given").and_then(Value::as_str).unwrap_or_default();
+            let given = author
+                .get("given")
+                .and_then(Value::as_str)
+                .unwrap_or_default();
             let family = author
                 .get("family")
                 .and_then(Value::as_str)
