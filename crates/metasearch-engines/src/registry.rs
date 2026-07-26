@@ -1,6 +1,7 @@
 use crate::{
-    arxiv::ArxivEngine, brave::BraveEngine, duckduckgo_html::DuckDuckGoHtmlEngine,
-    qwant::QwantEngine, wikipedia::WikipediaEngine,
+    arxiv::ArxivEngine, brave::BraveEngine, crossref::CrossrefEngine,
+    duckduckgo_html::DuckDuckGoHtmlEngine, pubmed::PubMedEngine, qwant::QwantEngine,
+    semantic_scholar::SemanticScholarEngine, wikipedia::WikipediaEngine,
 };
 use metasearch_core::{
     EngineContext, EngineDescriptor, EngineFailure, EngineOutput, NormalizedQuery, SearchEngine,
@@ -13,6 +14,9 @@ pub enum RegisteredEngine {
     DuckDuckGoHtml,
     Brave,
     Qwant,
+    PubMed,
+    SemanticScholar,
+    Crossref,
 }
 
 #[async_trait::async_trait(?Send)]
@@ -24,6 +28,9 @@ impl SearchEngine for RegisteredEngine {
             Self::DuckDuckGoHtml => DuckDuckGoHtmlEngine.descriptor(),
             Self::Brave => BraveEngine.descriptor(),
             Self::Qwant => QwantEngine.descriptor(),
+            Self::PubMed => PubMedEngine.descriptor(),
+            Self::SemanticScholar => SemanticScholarEngine.descriptor(),
+            Self::Crossref => CrossrefEngine.descriptor(),
         }
     }
 
@@ -38,16 +45,22 @@ impl SearchEngine for RegisteredEngine {
             Self::DuckDuckGoHtml => DuckDuckGoHtmlEngine.search(query, context).await,
             Self::Brave => BraveEngine.search(query, context).await,
             Self::Qwant => QwantEngine.search(query, context).await,
+            Self::PubMed => PubMedEngine.search(query, context).await,
+            Self::SemanticScholar => SemanticScholarEngine.search(query, context).await,
+            Self::Crossref => CrossrefEngine.search(query, context).await,
         }
     }
 }
 
-static REGISTRY: [RegisteredEngine; 5] = [
+static REGISTRY: [RegisteredEngine; 8] = [
     RegisteredEngine::Arxiv,
     RegisteredEngine::Wikipedia,
     RegisteredEngine::DuckDuckGoHtml,
     RegisteredEngine::Brave,
     RegisteredEngine::Qwant,
+    RegisteredEngine::PubMed,
+    RegisteredEngine::SemanticScholar,
+    RegisteredEngine::Crossref,
 ];
 
 pub fn registry() -> &'static [RegisteredEngine] {
