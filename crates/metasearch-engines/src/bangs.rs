@@ -152,10 +152,9 @@ pub fn resolve_bangs(raw_query: &str) -> Result<BangResolution, BangError> {
 
         let normalized = alias.to_ascii_lowercase();
         let spec = find_bang(&normalized).ok_or_else(|| BangError::Unknown(normalized.clone()))?;
-        let (kind, target_engines, target_category) = match spec.target {
-            BangTarget::Engine(engine) => ("engine", &[engine][..], None),
-            BangTarget::Profile(profile) => ("engine", profile, None),
-            BangTarget::Category(category) => ("category", &[][..], Some(category)),
+        let kind = match spec.target {
+            BangTarget::Engine(_) | BangTarget::Profile(_) => "engine",
+            BangTarget::Category(_) => "category",
         };
         if let Some((existing_kind, existing_alias)) = &selection_kind {
             if *existing_kind != kind {
@@ -166,9 +165,16 @@ pub fn resolve_bangs(raw_query: &str) -> Result<BangResolution, BangError> {
         }
 
         bangs.push(normalized);
-        engines.extend(target_engines.iter().map(|engine| (*engine).to_owned()));
-        if let Some(category) = target_category {
-            categories.insert(category.to_owned());
+        match spec.target {
+            BangTarget::Engine(engine) => {
+                engines.insert(engine.to_owned());
+            }
+            BangTarget::Profile(profile) => {
+                engines.extend(profile.iter().map(|engine| (*engine).to_owned()));
+            }
+            BangTarget::Category(category) => {
+                categories.insert(category.to_owned());
+            }
         }
     }
 
@@ -226,7 +232,7 @@ mod tests {
 
     #[test]
     fn preserves_literal_exclamation_marks() {
-        let resolution = resolve_bangs(r"\\!gh wow! cloudflare").unwrap();
+        let resolution = resolve_bangs(r"\!gh wow! cloudflare").unwrap();
         assert_eq!(resolution.provider_query, "!gh wow! cloudflare");
         assert!(resolution.bangs.is_empty());
     }
