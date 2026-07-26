@@ -190,8 +190,8 @@ fn publication_date(item: &Value) -> Option<String> {
     item.get("sortpubdate")
         .and_then(Value::as_str)
         .map(str::trim)
-        .filter(|value| value.len() >= 10)
-        .map(|value| value[..10].replace('/', "-"))
+        .and_then(|value| value.get(..10))
+        .map(|value| value.replace('/', "-"))
         .or_else(|| {
             item.get("pubdate")
                 .and_then(Value::as_str)
@@ -404,7 +404,7 @@ mod tests {
             "../../../fixtures/engines/pubmed/search-normal.json"
         ))
         .unwrap();
-        assert_eq!(ids, ["12345678"]);
+        assert_eq!(ids, vec!["12345678".to_string()]);
 
         let empty = parse_search_ids(include_bytes!(
             "../../../fixtures/engines/pubmed/search-empty.json"
