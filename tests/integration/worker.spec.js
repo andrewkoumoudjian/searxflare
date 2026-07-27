@@ -88,7 +88,7 @@ describe("Worker routes", () => {
     expect((await directory.json()).keys[0].kid).toBe("test");
 
     const mock = mockProviders();
-    const response = await exports.default.fetch(new Request("https://example.com/v1/search?q=cloudflare&engines=brave-web", { headers: AUTH }));
+    const response = await exports.default.fetch(new Request("https://example.com/v1/search?q=bot-auth-signature&engines=brave-web", { headers: AUTH }));
     expect(response.status).toBe(200);
     const request = mock.mock.calls
       .map(([input, init]) => input instanceof Request ? input : new Request(input, init))
