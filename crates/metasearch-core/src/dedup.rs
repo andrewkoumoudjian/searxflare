@@ -9,6 +9,7 @@ pub fn normalize_provider_result(
     let canonical_url = canonicalize_url(&result.url)?;
     let mut positions = BTreeMap::new();
     positions.insert(result.engine_id.clone(), result.position);
+    let provider_metadata = BTreeMap::from([(result.engine_id.clone(), result.metadata.clone())]);
     Ok(NormalizedResult {
         url: result.url,
         canonical_url,
@@ -18,6 +19,7 @@ pub fn normalize_provider_result(
         thumbnail: result.thumbnail,
         category: result.category,
         metadata: result.metadata,
+        provider_metadata,
         engines: vec![result.engine_id.clone()],
         positions,
         contributions: vec![EngineContribution {
@@ -52,6 +54,9 @@ pub fn deduplicate(results: Vec<NormalizedResult>) -> Vec<NormalizedResult> {
             for (key, value) in result.metadata {
                 existing.metadata.entry(key).or_insert(value);
             }
+            for (engine, metadata) in result.provider_metadata {
+                existing.provider_metadata.entry(engine).or_insert(metadata);
+            }
             for (engine, position) in result.positions {
                 existing
                     .positions
@@ -74,7 +79,7 @@ pub fn deduplicate(results: Vec<NormalizedResult>) -> Vec<NormalizedResult> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_json::{Map, Value};
+    use serde_json::{json, Map};
 
     fn provider(engine: &str, title: &str, content: &str, position: u32) -> ProviderResult {
         ProviderResult {
@@ -84,7 +89,7 @@ mod tests {
             published_at: None,
             thumbnail: None,
             category: "general".into(),
-            metadata: Map::<String, Value>::new(),
+            metadata: Map::from_iter([("provider_field".into(), json!(engine))]),
             engine_id: engine.into(),
             position,
             engine_weight: 1.0,
@@ -104,5 +109,7 @@ mod tests {
         assert_eq!(merged[0].engines, vec!["a", "b"]);
         assert_eq!(merged[0].positions["a"], 2);
         assert_eq!(merged[0].positions["b"], 1);
+        assert_eq!(merged[0].provider_metadata["a"]["provider_field"], "a");
+        assert_eq!(merged[0].provider_metadata["b"]["provider_field"], "b");
     }
 }

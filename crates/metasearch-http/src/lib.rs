@@ -72,6 +72,23 @@ pub fn classify_challenge(engine_id: &str, status: u16, body: &[u8]) -> Option<E
 
     let scan =
         String::from_utf8_lossy(&body[..body.len().min(CHALLENGE_SCAN_LIMIT)]).to_ascii_lowercase();
+    let rate_limit_markers = [
+        "rate limit exceeded",
+        "secondary rate limit",
+        "too many requests",
+        "request quota exceeded",
+    ];
+    if rate_limit_markers
+        .iter()
+        .any(|marker| scan.contains(marker))
+    {
+        return Some(EngineFailure::new(
+            engine_id,
+            FailureKind::EngineRateLimited,
+            format!("provider returned rate-limit response with HTTP {status}"),
+        ));
+    }
+
     let challenge_markers = [
         "cf-chl-",
         "cloudflare ray id",
@@ -450,6 +467,16 @@ mod tests {
         );
         assert_eq!(
             classify_challenge("test", 429, b"").unwrap().kind,
+            FailureKind::EngineRateLimited
+        );
+        assert_eq!(
+            classify_challenge(
+                "test",
+                403,
+                br#"{"message":"API rate limit exceeded for this client."}"#
+            )
+            .unwrap()
+            .kind,
             FailureKind::EngineRateLimited
         );
         assert_eq!(

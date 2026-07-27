@@ -1,8 +1,8 @@
 openapi: 3.0.3
 info:
   title: Searxflare API
-  version: 0.1.0
-  description: API-only metasearch service running on Cloudflare Workers.
+  version: 0.2.0
+  description: API-only metasearch service running on Cloudflare Workers. Recognized compile-time bangs are parsed from the query before provider execution.
 servers:
   - url: https://search.example.com
 security:
@@ -127,6 +127,7 @@ paths:
         - name: q
           in: query
           required: true
+          description: Search text. Recognized compile-time bangs such as !web, !books, !wp and !gh are removed before provider execution.
           schema: { type: string, minLength: 1, maxLength: 499 }
         - name: engines
           in: query
@@ -168,6 +169,7 @@ components:
       name: q
       in: query
       required: true
+      description: Search text. Recognized compile-time bangs are parsed before normalization and removed from the provider query. Prefix a bang with a backslash to keep it literal.
       schema: { type: string, minLength: 1, maxLength: 499 }
     Engines:
       name: engines
@@ -259,14 +261,22 @@ components:
       enum: [day, week, month, year]
     Ranking:
       type: string
-      enum: [rrf-v1, searx-compat-v1]
-      default: rrf-v1
+      enum: [query-aware-v1, rrf-v1, searx-compat-v1]
+      default: query-aware-v1
     SearchRequest:
       type: object
       additionalProperties: false
       properties:
-        query: { type: string, minLength: 1, maxLength: 499 }
-        q: { type: string, minLength: 1, maxLength: 499 }
+        query:
+          type: string
+          minLength: 1
+          maxLength: 499
+          description: Original search text, optionally containing compile-time bangs.
+        q:
+          type: string
+          minLength: 1
+          maxLength: 499
+          description: Alias for query.
         engines:
           type: array
           maxItems: 5
@@ -294,10 +304,24 @@ components:
       not: { required: [page, cursor] }
     SearchResponse:
       type: object
-      required: [request_id, query, ranking, partial, cached, result_count, results, engines]
+      required: [request_id, query, provider_query, bangs, resolved_categories, resolved_engines, ranking, partial, cached, result_count, results, engines]
       properties:
         request_id: { type: string, format: uuid }
-        query: { type: string }
+        query:
+          type: string
+          description: Normalized original user query, including recognized bang tokens.
+        provider_query:
+          type: string
+          description: Query sent to providers after recognized bangs are removed.
+        bangs:
+          type: array
+          items: { type: string }
+        resolved_categories:
+          type: array
+          items: { type: string }
+        resolved_engines:
+          type: array
+          items: { type: string }
         ranking: { $ref: '#/components/schemas/Ranking' }
         partial: { type: boolean }
         cached: { type: boolean }
@@ -310,7 +334,7 @@ components:
           items: { $ref: '#/components/schemas/EngineReport' }
     Result:
       type: object
-      required: [url, canonical_url, title, content, category, metadata, engines, positions, score]
+      required: [url, canonical_url, title, content, category, metadata, provider_metadata, engines, positions, score]
       properties:
         url: { type: string, format: uri }
         canonical_url: { type: string, format: uri }
@@ -319,7 +343,16 @@ components:
         published_at: { type: string, format: date-time, nullable: true }
         thumbnail: { type: string, format: uri, nullable: true }
         category: { type: string }
-        metadata: { type: object, additionalProperties: true }
+        metadata:
+          type: object
+          additionalProperties: true
+          description: Backward-compatible merged metadata view.
+        provider_metadata:
+          type: object
+          description: Provider-specific metadata namespaced by engine ID.
+          additionalProperties:
+            type: object
+            additionalProperties: true
         engines:
           type: array
           items: { type: string }

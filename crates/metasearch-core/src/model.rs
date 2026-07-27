@@ -39,6 +39,7 @@ pub enum TimeRange {
 #[serde(rename_all = "kebab-case")]
 pub enum RankingStrategy {
     #[default]
+    QueryAwareV1,
     RrfV1,
     SearxCompatV1,
 }
@@ -46,6 +47,7 @@ pub enum RankingStrategy {
 impl RankingStrategy {
     pub const fn as_str(self) -> &'static str {
         match self {
+            Self::QueryAwareV1 => "query-aware-v1",
             Self::RrfV1 => "rrf-v1",
             Self::SearxCompatV1 => "searx-compat-v1",
         }
@@ -181,6 +183,8 @@ pub struct NormalizedResult {
     pub category: String,
     #[serde(default)]
     pub metadata: Map<String, Value>,
+    #[serde(default)]
+    pub provider_metadata: BTreeMap<String, Map<String, Value>>,
     pub engines: Vec<String>,
     pub positions: BTreeMap<String, u32>,
     #[serde(default, skip_serializing)]
@@ -290,6 +294,7 @@ mod tests {
             thumbnail: None,
             category: "general".into(),
             metadata: Map::new(),
+            provider_metadata: BTreeMap::from([("example".into(), Map::new())]),
             engines: vec!["example".into()],
             positions: BTreeMap::from([("example".into(), 1)]),
             contributions: vec![EngineContribution {
@@ -302,10 +307,12 @@ mod tests {
 
         let encoded = serde_json::to_value(&result).unwrap();
         assert!(encoded.get("contributions").is_none());
+        assert!(encoded.get("provider_metadata").is_some());
 
         let decoded: NormalizedResult = serde_json::from_value(encoded).unwrap();
         assert!(decoded.contributions.is_empty());
         assert_eq!(decoded.url, result.url);
         assert_eq!(decoded.engines, result.engines);
+        assert!(decoded.provider_metadata.contains_key("example"));
     }
 }

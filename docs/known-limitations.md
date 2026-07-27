@@ -4,11 +4,14 @@
 - Brave Web and Qwant Web use provider-controlled public frontend contracts rather than supported public APIs. Selector or schema changes may disable either engine until fixtures and parsers are updated.
 - Brave Web is capped at ten pages and Qwant Web at five pages. Qwant Web does not expose a stable time-range parameter.
 - Qwant DataDome cookie persistence is not implemented. Cloudflare preview egress was challenged during validation on 2026-07-25, so Qwant remains stateless and default-disabled. Explicit requests classify the challenge without bypassing it.
-- PubMed, Semantic Scholar and Crossref are default-disabled and must be selected explicitly. They use public provider capacity and can independently rate-limit or deny Worker egress.
+- PubMed, Semantic Scholar, Crossref and GitHub are default-disabled and must be selected explicitly. They use public provider capacity and can independently rate-limit or deny Worker egress.
+- GitHub repository search is unauthenticated in the current slice because provider-scoped secrets are not yet exposed to engines. It uses GitHub's separate public search rate-limit bucket and must not be enabled by default until Cloudflare preview egress and observed limits are validated.
 - PubMed uses a shared-deadline two-request ESearch-to-ESummary flow. The current result content uses summary and journal metadata rather than fetching full abstracts through a third request.
 - Semantic Scholar uses its unauthenticated shared rate pool and caps relevance paging at the first 1,000 results. Provider API-key support is not yet wired into the engine boundary.
 - Crossref requests do not yet include an operator `mailto` parameter because no service contact address is configured.
-- OpenAlex is deferred because its current API requires a key and the engine boundary does not yet expose provider-scoped secrets.
+- OpenAlex and production Exa MCP are deferred because they require provider-scoped authentication and the engine boundary does not yet expose provider secrets. Exa additionally requires a bounded MCP transport adapter or an explicitly approved direct API adapter.
+- `query-aware-v1` is deterministic lexical reranking, not semantic model inference. It uses the bang-stripped provider query, title/content/URL token coverage, exact phrase matching, provider contribution data and relative freshness. It cannot infer synonyms or intent beyond those signals.
+- The current `!books` profile resolves to Crossref only; additional book-specific engines are not yet implemented.
 - Wikipedia locale support is currently restricted to English, French, German and Spanish compile-time hosts.
 - Search cursors have a signing interface but no public opaque-cursor flow yet.
 - Provider parse duration and response byte measures are approximated in the current slices.

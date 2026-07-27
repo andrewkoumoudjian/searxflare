@@ -1,0 +1,26 @@
+id: github
+display_name: GitHub
+endpoint: https://api.github.com/search/repositories
+method: GET
+categories: [code]
+source_kind: json
+allowed_hosts: [api.github.com]
+capabilities:
+  paging: true
+  locale: false
+  country: false
+  safe_search: false
+  time_range: false
+limits:
+  timeout_ms: 2500
+  max_body_bytes: 2097152
+  max_steps: 3
+  max_redirects: 2
+versions:
+  parser: github-rest-json-v1
+cache:
+  response_ttl_seconds: 300
+  negative_ttl_seconds: 30
+state: stateless
+default_enabled: false
+notes: Uses the public GitHub REST repository search endpoint with bounded page and per_page parameters, stable client identification, the current API version header, strict JSON validation, and independent rate-limit classification. It remains default-disabled until Cloudflare preview egress is validated. The separately supplied values github, 3.0, and 1.0 were not interpreted as configuration.
