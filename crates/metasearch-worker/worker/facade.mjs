@@ -94,7 +94,7 @@ function safeCrawlUrl(raw) {
     if (url.protocol !== "https:" || url.username || url.password) return null;
     const host = url.hostname.toLowerCase();
     if (host === "localhost" || host.endsWith(".localhost") || host.endsWith(".internal")) return null;
-    if (/^(0|10|127|169\\.254|172\\.(1[6-9]|2\\d|3[01])|192\\.168)\\./.test(host)) return null;
+    if (/^(0|10|127|169\.254|172\.(1[6-9]|2\d|3[01])|192\.168)\./.test(host)) return null;
     url.hash = "";
     return url;
   } catch {
@@ -109,7 +109,7 @@ async function sha256Hex(value) {
 }
 
 function markdownDocument(page) {
-  const safeTitle = page.title.replace(/[\\r\\n]+/g, " ").trim();
+  const safeTitle = page.title.replace(/[\r\n]+/g, " ").trim();
   return [
     "---",
     `url: ${JSON.stringify(page.url)}`,
@@ -125,7 +125,7 @@ function markdownDocument(page) {
     "",
     ...page.links.map(link => `- ${link}`),
     "",
-  ].join("\\n");
+  ].join("\n");
 }
 
 async function crawlPage(rawUrl, env) {
@@ -160,7 +160,7 @@ async function crawlPage(rawUrl, env) {
   const rewriter = new HTMLRewriter()
     .on("title", { text(chunk) { if (title.length < 512) title += chunk.text; } })
     .on("body", { text(chunk) {
-      if (text.length < MAX_CRAWL_TEXT_CHARS) text += chunk.text.replace(/\\s+/g, " ") + " ";
+      if (text.length < MAX_CRAWL_TEXT_CHARS) text += chunk.text.replace(/\s+/g, " ") + " ";
     }})
     .on("a[href]", { element(element) {
       if (links.size >= 64) return;
@@ -175,8 +175,8 @@ async function crawlPage(rawUrl, env) {
 
   const page = {
     url: finalUrl.href,
-    title: title.replace(/\\s+/g, " ").trim(),
-    text: text.replace(/\\s+/g, " ").trim().slice(0, MAX_CRAWL_TEXT_CHARS),
+    title: title.replace(/\s+/g, " ").trim(),
+    text: text.replace(/\s+/g, " ").trim().slice(0, MAX_CRAWL_TEXT_CHARS),
     links: [...links],
     fetchedAt: new Date().toISOString(),
   };
@@ -202,9 +202,9 @@ async function crawlResults(results, env) {
 }
 
 function lexicalScore(result, query) {
-  const normalized = value => String(value || "").toLocaleLowerCase().normalize("NFKC").replace(/[^\\p{L}\\p{N}]+/gu, " ").trim();
+  const normalized = value => String(value || "").toLocaleLowerCase().normalize("NFKC").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
   const needle = normalized(query);
-  const terms = [...new Set(needle.split(/\\s+/).filter(Boolean))];
+  const terms = [...new Set(needle.split(/\s+/).filter(Boolean))];
   const title = normalized(result.title);
   const content = normalized(result.content);
   const url = normalized(result.canonical_url || result.url);
@@ -221,15 +221,15 @@ function lexicalScore(result, query) {
 function aiChunkToResult(chunk, position) {
   const metadata = chunk.item?.metadata || {};
   const text = String(chunk.text || "");
-  const frontmatterUrl = text.match(/^url:\\s*["']?([^"'\\n]+)["']?/m)?.[1];
+  const frontmatterUrl = text.match(/^url:\s*["']?([^"'\n]+)["']?/m)?.[1];
   const url = safeCrawlUrl(metadata.url || frontmatterUrl);
   if (!url) return null;
-  const heading = text.match(/^#\\s+(.+)$/m)?.[1]?.trim();
+  const heading = text.match(/^#\s+(.+)$/m)?.[1]?.trim();
   return {
     url: url.href,
     canonical_url: url.href,
     title: metadata.title || heading || url.hostname,
-    content: text.replace(/^---[\\s\\S]*?---\\s*/m, "").replace(/^#\\s+.*$/m, "").trim().slice(0, 600),
+    content: text.replace(/^---[\s\S]*?---\s*/m, "").replace(/^#\s+.*$/m, "").trim().slice(0, 600),
     category: "general",
     metadata: { ai_search_score: chunk.score, ai_search_item: chunk.item?.key },
     provider_metadata: { "ai-search-crawl": { score: chunk.score, fusion_method: chunk.scoring_details?.fusion_method || "rrf" } },
