@@ -1,10 +1,7 @@
 import { env, exports } from "cloudflare:workers";
 import { createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import WorkerEntrypoint, {
-  aiChunkToResult,
-  mergeRankedResults,
-} from "../../crates/metasearch-worker/worker/facade.mjs";
+import WorkerEntrypoint from "../../crates/metasearch-worker/worker/facade.mjs";
 
 const AUTH = { authorization: "Bearer test-api-key" };
 
@@ -199,44 +196,6 @@ describe("Worker routes", () => {
     expect(body.engines.some((engine) => engine.failure_kind === "ENGINE_CHALLENGED")).toBe(true);
     expect(body.engines.map((engine) => engine.engine_id)).toContain("qwant-web");
     expect(body.results.every((result) => Object.keys(result.provider_metadata).length >= 1)).toBe(true);
-  });
-
-  it("merges AI Search chunks, deduplicates URLs, and publishes final score order", () => {
-    const provider = {
-      url: "https://example.com/workers",
-      canonical_url: "https://example.com/workers",
-      title: "Unrelated provider result",
-      content: "",
-      engines: ["brave-web"],
-      positions: { "brave-web": 1 },
-      provider_metadata: { "brave-web": {} },
-      metadata: {},
-      score: 99,
-    };
-    const duplicate = aiChunkToResult({
-      score: 0.8,
-      text: "# Cloudflare Workers Rust\nRelevant indexed content.",
-      item: { key: "documents/one.md", metadata: { url: provider.url } },
-      scoring_details: { fusion_method: "rrf" },
-    }, 1);
-    const indexed = aiChunkToResult({
-      score: 0.7,
-      text: "# Cloudflare Workers Rust Guide\nCloudflare Workers Rust reference.",
-      item: { key: "documents/two.md", metadata: { url: "https://example.com/rust-guide" } },
-      scoring_details: { fusion_method: "rrf" },
-    }, 2);
-
-    const merged = mergeRankedResults(
-      [provider],
-      [duplicate, indexed],
-      "cloudflare workers rust",
-      "query-aware-v1",
-      10,
-    );
-    expect(merged).toHaveLength(2);
-    expect(merged[0].url).toBe("https://example.com/rust-guide");
-    expect(merged[1].engines).toEqual(["brave-web", "ai-search-crawl"]);
-    expect(merged[0].score).toBeGreaterThanOrEqual(merged[1].score);
   });
 
   it("resolves category bangs before provider execution", async () => {

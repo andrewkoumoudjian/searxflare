@@ -399,7 +399,7 @@ function lexicalScore(result, query) {
     + 0.05 * Number(result.metadata?.ai_search_score || 0);
 }
 
-export function mergeRankedResults(providerResults, aiResults, query, ranking, limit) {
+function mergeRankedResults(providerResults, aiResults, query, ranking, limit) {
   const merged = new Map();
   const add = (result, rank, source) => {
     const key = result.canonical_url || result.url;
@@ -441,7 +441,7 @@ export function mergeRankedResults(providerResults, aiResults, query, ranking, l
   return entries.slice(0, limit).map(entry => entry.result);
 }
 
-export function aiChunkToResult(chunk, position) {
+function aiChunkToResult(chunk, position) {
   const metadata = chunk.item?.metadata || {};
   const text = String(chunk.text || "");
   const frontmatterUrl = text.match(/^url:\s*["']?([^"'\n]+)["']?/m)?.[1];
