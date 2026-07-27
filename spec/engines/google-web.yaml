@@ -1,0 +1,26 @@
+id: google-web
+display_name: Google Web
+endpoint: https://www.google.com/search
+method: GET
+categories: [general]
+source_kind: html
+allowed_hosts: [www.google.com]
+capabilities:
+  paging: true
+  locale: true
+  country: true
+  safe_search: true
+  time_range: true
+limits:
+  timeout_ms: 3500
+  max_body_bytes: 2097152
+  max_steps: 3
+  max_redirects: 2
+versions:
+  parser: google-web-html-v1
+cache:
+  response_ttl_seconds: 120
+  negative_ttl_seconds: 30
+state: stateless
+default_enabled: false
+notes: Uses the public HTML frontend with fixed hosts, bounded ten-result pages, locale, safe-search and time filters, tracking-link unwrapping, streaming lol-html parsing, and explicit changed-layout detection. Default-disabled because challenge behavior from Cloudflare egress is not yet validated.

@@ -23,8 +23,14 @@ cargo "+$RUST_TOOLCHAIN" clippy --locked --workspace --all-targets --all-feature
 cargo "+$RUST_TOOLCHAIN" test --locked --workspace
 cargo "+$RUST_TOOLCHAIN" build --locked --workspace --target wasm32-unknown-unknown
 
-python3 -m pip install --disable-pip-version-check jsonschema openapi-spec-validator pyyaml
-npm run validate:specs
+SPEC_VALIDATOR_VENV="$ROOT_DIR/target/spec-validator-venv"
+python3 -m venv "$SPEC_VALIDATOR_VENV"
+"$SPEC_VALIDATOR_VENV/bin/python" -m pip install \
+  --disable-pip-version-check \
+  jsonschema \
+  openapi-spec-validator \
+  pyyaml
+PATH="$SPEC_VALIDATOR_VENV/bin:$PATH" npm run validate:specs
 
 (
   cd "$ROOT_DIR/crates/metasearch-worker"

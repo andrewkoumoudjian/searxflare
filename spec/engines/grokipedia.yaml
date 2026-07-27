@@ -1,0 +1,26 @@
+id: grokipedia
+display_name: Grokipedia
+endpoint: https://api.x.ai/grokipedia/v1/search
+method: GET
+categories: [general, reference]
+source_kind: json
+allowed_hosts: [api.x.ai]
+capabilities:
+  paging: true
+  locale: false
+  country: false
+  safe_search: false
+  time_range: false
+limits:
+  timeout_ms: 2500
+  max_body_bytes: 2097152
+  max_steps: 3
+  max_redirects: 2
+versions:
+  parser: grokipedia-json-v1
+cache:
+  response_ttl_seconds: 300
+  negative_ttl_seconds: 30
+state: stateless
+default_enabled: false
+notes: Uses the public JSON search surface with bounded limit and offset parameters, strict result-array validation, and explicit rate-limit classification. Default-disabled pending Cloudflare preview egress and schema validation.

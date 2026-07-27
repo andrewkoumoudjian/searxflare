@@ -62,6 +62,50 @@ const BANG_REGISTRY: &[BangSpec] = &[
         target: BangTarget::Engine("qwant-web"),
     },
     BangSpec {
+        alias: "mojeek",
+        target: BangTarget::Engine("mojeek-web"),
+    },
+    BangSpec {
+        alias: "mj",
+        target: BangTarget::Engine("mojeek-web"),
+    },
+    BangSpec {
+        alias: "yahoo",
+        target: BangTarget::Engine("yahoo-web"),
+    },
+    BangSpec {
+        alias: "yh",
+        target: BangTarget::Engine("yahoo-web"),
+    },
+    BangSpec {
+        alias: "yandex",
+        target: BangTarget::Engine("yandex-web"),
+    },
+    BangSpec {
+        alias: "ya",
+        target: BangTarget::Engine("yandex-web"),
+    },
+    BangSpec {
+        alias: "baidu",
+        target: BangTarget::Engine("baidu-web"),
+    },
+    BangSpec {
+        alias: "bd",
+        target: BangTarget::Engine("baidu-web"),
+    },
+    BangSpec {
+        alias: "google",
+        target: BangTarget::Engine("google-web"),
+    },
+    BangSpec {
+        alias: "grokipedia",
+        target: BangTarget::Engine("grokipedia"),
+    },
+    BangSpec {
+        alias: "grok",
+        target: BangTarget::Engine("grokipedia"),
+    },
+    BangSpec {
         alias: "pubmed",
         target: BangTarget::Engine("pubmed"),
     },
@@ -111,12 +155,10 @@ impl Display for BangError {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Unknown(bang) => write!(formatter, "unknown bang: !{bang}"),
-            Self::Conflicting(left, right) => {
-                write!(
-                    formatter,
-                    "conflicting bangs cannot be combined: !{left} and !{right}"
-                )
-            }
+            Self::Conflicting(left, right) => write!(
+                formatter,
+                "conflicting bangs cannot be combined: !{left} and !{right}"
+            ),
             Self::EmptyQuery => formatter.write_str("a search query cannot contain only bangs"),
         }
     }
@@ -211,6 +253,20 @@ mod tests {
 
         let books = resolve_bangs("!books food safety").unwrap();
         assert_eq!(books.engines, vec!["crossref"]);
+
+        let providers = resolve_bangs("!mj !yh !ya !bd !google !grok independent search").unwrap();
+        assert_eq!(providers.provider_query, "independent search");
+        assert_eq!(
+            providers.engines,
+            vec![
+                "baidu-web",
+                "google-web",
+                "grokipedia",
+                "mojeek-web",
+                "yahoo-web",
+                "yandex-web"
+            ]
+        );
     }
 
     #[test]

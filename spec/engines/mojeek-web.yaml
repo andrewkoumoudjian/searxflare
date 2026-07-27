@@ -1,0 +1,26 @@
+id: mojeek-web
+display_name: Mojeek Web
+endpoint: https://www.mojeek.com/search
+method: GET
+categories: [general]
+source_kind: html
+allowed_hosts: [www.mojeek.com]
+capabilities:
+  paging: true
+  locale: true
+  country: true
+  safe_search: true
+  time_range: true
+limits:
+  timeout_ms: 3500
+  max_body_bytes: 2097152
+  max_steps: 3
+  max_redirects: 2
+versions:
+  parser: mojeek-web-html-v1
+cache:
+  response_ttl_seconds: 180
+  negative_ttl_seconds: 30
+state: stateless
+default_enabled: false
+notes: Uses the public HTML frontend with fixed hosts, bounded paging, locale cookies, safe-search, date filters, streaming lol-html parsing, and explicit changed-layout detection. Default-disabled pending Cloudflare preview egress validation.
