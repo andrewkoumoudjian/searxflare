@@ -274,7 +274,10 @@ mod tests {
         assert_eq!(request.url.host_str(), Some("www.mojeek.com"));
         assert_eq!(parameters.get("s").map(String::as_str), Some("10"));
         assert_eq!(parameters.get("safe").map(String::as_str), Some("1"));
-        assert_eq!(parameters.get("since").map(String::as_str), Some("20250630"));
+        assert_eq!(
+            parameters.get("since").map(String::as_str),
+            Some("20250630")
+        );
         assert_eq!(request.cookies.get("lb").map(String::as_str), Some("fr"));
         assert_eq!(request.cookies.get("arc").map(String::as_str), Some("CA"));
     }

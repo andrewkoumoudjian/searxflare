@@ -1,9 +1,9 @@
 use crate::{
     arxiv::ArxivEngine, baidu::BaiduEngine, brave::BraveEngine, crossref::CrossrefEngine,
     duckduckgo_html::DuckDuckGoHtmlEngine, github::GitHubEngine, google::GoogleEngine,
-    grokipedia::GrokipediaEngine, mojeek::MojeekEngine, pubmed::PubMedEngine,
-    qwant::QwantEngine, semantic_scholar::SemanticScholarEngine, wikipedia::WikipediaEngine,
-    yahoo::YahooEngine, yandex::YandexEngine,
+    grokipedia::GrokipediaEngine, mojeek::MojeekEngine, pubmed::PubMedEngine, qwant::QwantEngine,
+    semantic_scholar::SemanticScholarEngine, wikipedia::WikipediaEngine, yahoo::YahooEngine,
+    yandex::YandexEngine,
 };
 use metasearch_core::{
     EngineContext, EngineDescriptor, EngineFailure, EngineOutput, NormalizedQuery, SearchEngine,

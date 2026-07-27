@@ -1,10 +1,13 @@
 # Known limitations
 
 - DuckDuckGo HTML supports only the first page; VQD continuation is out of scope.
-- Brave Web and Qwant Web use provider-controlled public frontend contracts rather than supported public APIs. Selector or schema changes may disable either engine until fixtures and parsers are updated.
-- Brave Web is capped at ten pages and Qwant Web at five pages. Qwant Web does not expose a stable time-range parameter.
+- Brave Web, Qwant Web, Mojeek, Yahoo, Yandex, Baidu and Google use provider-controlled public search or frontend contracts rather than supported public APIs. Grokipedia uses a provider-controlled JSON surface. Selector or schema changes may disable any of these engines until fixtures and parsers are updated.
+- Brave Web is capped at ten pages and Qwant Web at five pages. The remaining public-provider adapters also bound paging, but upstream result windows and regional behavior remain provider-controlled. Qwant Web does not expose a stable time-range parameter.
 - Qwant DataDome cookie persistence is not implemented. Cloudflare preview egress was challenged during validation on 2026-07-25, so Qwant remains stateless and default-disabled. Explicit requests classify the challenge without bypassing it.
-- PubMed, Semantic Scholar, Crossref and GitHub are default-disabled and must be selected explicitly. They use public provider capacity and can independently rate-limit or deny Worker egress.
+- PubMed, Semantic Scholar, Crossref, GitHub, Qwant, Mojeek, Yahoo, Yandex, Baidu, Google and Grokipedia are default-disabled and must be selected explicitly. They use public provider capacity and can independently challenge, rate-limit or deny Worker egress.
+- Yahoo and Google tracking wrappers are decoded locally without following secondary requests. Baidu tracking links are returned without secondary resolution, so a result may still navigate through Baidu.
+- Yahoo locale support is limited to its compile-time regional host map. Mojeek, Yahoo, Yandex, Baidu and Google locale, region, SafeSearch and time-filter mappings are best-effort translations to provider-controlled request parameters and cookies.
+- Grokipedia search is unauthenticated and requires a top-level JSON result array. Rate-limit responses or schema drift are classified as provider failures rather than retried.
 - GitHub repository search is unauthenticated in the current slice because provider-scoped secrets are not yet exposed to engines. It uses GitHub's separate public search rate-limit bucket and must not be enabled by default until Cloudflare preview egress and observed limits are validated.
 - PubMed uses a shared-deadline two-request ESearch-to-ESummary flow. The current result content uses summary and journal metadata rather than fetching full abstracts through a third request.
 - Semantic Scholar uses its unauthenticated shared rate pool and caps relevance paging at the first 1,000 results. Provider API-key support is not yet wired into the engine boundary.

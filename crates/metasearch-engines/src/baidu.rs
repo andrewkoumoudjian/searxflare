@@ -179,7 +179,10 @@ mod tests {
         let request = build_request(&query()).unwrap();
         let parameters: BTreeMap<_, _> = request.url.query_pairs().into_owned().collect();
         assert_eq!(request.url.host_str(), Some("www.baidu.com"));
-        assert_eq!(parameters.get("wd").map(String::as_str), Some("cloudflare rust"));
+        assert_eq!(
+            parameters.get("wd").map(String::as_str),
+            Some("cloudflare rust")
+        );
         assert_eq!(parameters.get("pn").map(String::as_str), Some("10"));
         assert_eq!(parameters.get("rn").map(String::as_str), Some("10"));
         assert_eq!(parameters.get("ie").map(String::as_str), Some("utf-8"));

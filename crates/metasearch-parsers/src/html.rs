@@ -35,7 +35,12 @@ fn collapse_whitespace(value: &str) -> String {
 }
 
 fn descendant(item: &str, selector: &str) -> String {
-    format!("{item} {selector}")
+    item.split(',')
+        .map(str::trim)
+        .filter(|item| !item.is_empty())
+        .map(|item| format!("{item} {selector}"))
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 pub fn parse_selector_results(
@@ -251,5 +256,38 @@ mod tests {
         )
         .unwrap();
         assert!(results.is_empty());
+    }
+
+    #[test]
+    fn scopes_descendants_for_each_comma_separated_item_selector() {
+        let results = parse_selector_results(
+            br#"
+              <div class="result">
+                <h3><a href="/one">First title</a></h3>
+                <p class="summary">First summary</p>
+              </div>
+              <article class="result">
+                <h3><a href="/two">Second title</a></h3>
+                <p class="summary">Second summary</p>
+              </article>
+            "#,
+            &Url::parse("https://example.com/search").unwrap(),
+            &SelectorResultSpec {
+                no_results: None,
+                item: "div.result, article.result",
+                title: "h3 a",
+                url: "h3 a",
+                description: Some(".summary"),
+                thumbnail: None,
+            },
+            10,
+        )
+        .unwrap();
+
+        assert_eq!(results.len(), 2);
+        assert_eq!(results[0].title, "First title");
+        assert_eq!(results[0].description.as_deref(), Some("First summary"));
+        assert_eq!(results[1].title, "Second title");
+        assert_eq!(results[1].description.as_deref(), Some("Second summary"));
     }
 }

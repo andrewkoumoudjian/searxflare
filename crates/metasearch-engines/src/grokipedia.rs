@@ -116,7 +116,7 @@ fn page_url(item: &Value) -> Option<String> {
         }
     }
     let slug = optional_string(item, &["slug"])?;
-    let mut url = Url::parse("https://grokipedia.com/page/").ok()?;
+    let mut url = Url::parse("https://grokipedia.com/page").ok()?;
     url.path_segments_mut().ok()?.push(&slug);
     Some(url.into())
 }
@@ -223,7 +223,10 @@ mod tests {
         let request = build_request(&query()).unwrap();
         let parameters: BTreeMap<_, _> = request.url.query_pairs().into_owned().collect();
         assert_eq!(request.url.host_str(), Some("api.x.ai"));
-        assert_eq!(parameters.get("query").map(String::as_str), Some("cloudflare"));
+        assert_eq!(
+            parameters.get("query").map(String::as_str),
+            Some("cloudflare")
+        );
         assert_eq!(parameters.get("limit").map(String::as_str), Some("7"));
         assert_eq!(parameters.get("offset").map(String::as_str), Some("7"));
     }

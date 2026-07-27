@@ -46,7 +46,7 @@ Verify:
 
 1. `GET /healthz` returns `200` without authentication.
 2. `GET /readyz` returns `200` only when `API_KEY_SHA256` is configured.
-3. The authenticated engine catalogue returns the eight compiled engines.
+3. The authenticated engine catalogue returns the fifteen compiled engines.
 4. Each single-engine debug route returns results or a classified provider failure.
 5. A default authenticated search returns a deterministic JSON response.
 6. A deliberate provider failure produces a partial result when another engine succeeds.
