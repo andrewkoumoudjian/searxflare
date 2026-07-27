@@ -112,18 +112,18 @@ function markdownDocument(page) {
   const safeTitle = page.title.replace(/[\\r\\n]+/g, " ").trim();
   return [
     "---",
-    \`url: \${JSON.stringify(page.url)}\`,
-    \`title: \${JSON.stringify(safeTitle)}\`,
-    \`fetched_at: \${JSON.stringify(page.fetchedAt)}\`,
+    `url: ${JSON.stringify(page.url)}`,
+    `title: ${JSON.stringify(safeTitle)}`,
+    `fetched_at: ${JSON.stringify(page.fetchedAt)}`,
     "---",
     "",
-    \`# \${safeTitle || page.url}\`,
+    `# ${safeTitle || page.url}`,
     "",
     page.text,
     "",
     "## Discovered links",
     "",
-    ...page.links.map(link => \`- \${link}\`),
+    ...page.links.map(link => `- ${link}`),
     "",
   ].join("\\n");
 }
@@ -132,7 +132,7 @@ async function crawlPage(rawUrl, env) {
   const url = safeCrawlUrl(rawUrl);
   if (!url || !env.CRAWL_DOCUMENTS) return;
   const digest = await sha256Hex(url.href);
-  const marker = \`page:\${digest}\`;
+  const marker = `page:${digest}`;
   if (env.CRAWL_STATE && await env.CRAWL_STATE.get(marker)) return;
 
   const controller = new AbortController();
@@ -181,16 +181,16 @@ async function crawlPage(rawUrl, env) {
     fetchedAt: new Date().toISOString(),
   };
   if (!page.text) return;
-  await env.CRAWL_DOCUMENTS.put(\`documents/\${digest}.md\`, markdownDocument(page), {
+  await env.CRAWL_DOCUMENTS.put(`documents/${digest}.md`, markdownDocument(page), {
     httpMetadata: { contentType: "text/markdown; charset=utf-8" },
     customMetadata: { url: page.url, title: page.title.slice(0, 1024) },
   });
   if (env.CRAWL_STATE) {
     await env.CRAWL_STATE.put(marker, page.fetchedAt, { expirationTtl: 86400 });
-    await env.CRAWL_STATE.put(\`links:\${digest}\`, JSON.stringify(page.links), { expirationTtl: 604800 });
+    await env.CRAWL_STATE.put(`links:${digest}`, JSON.stringify(page.links), { expirationTtl: 604800 });
     for (const link of page.links.slice(0, 12)) {
       const linkDigest = await sha256Hex(link);
-      await env.CRAWL_STATE.put(\`frontier:\${linkDigest}\`, link, { expirationTtl: 604800 });
+      await env.CRAWL_STATE.put(`frontier:${linkDigest}`, link, { expirationTtl: 604800 });
     }
   }
 }
