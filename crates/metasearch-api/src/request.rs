@@ -2,7 +2,7 @@ use crate::{ApiError, FieldViolation};
 use metasearch_core::{
     normalize_query, NormalizedQuery, RankingStrategy, SafeSearch, TimeRange,
     DEFAULT_OVERALL_TIMEOUT_MS, DEFAULT_RESULT_LIMIT, MAX_CATEGORY_COUNT, MAX_ENGINE_COUNT,
-    MAX_OVERALL_TIMEOUT_MS, MAX_RESULT_LIMIT,
+    MAX_OVERALL_TIMEOUT_MS, MAX_RESULT_LIMIT, MIN_RESULT_LIMIT,
 };
 use serde::{Deserialize, Serialize};
 
@@ -110,10 +110,10 @@ impl TryFrom<SearchRequest> for ValidatedSearchRequest {
         }
 
         let limit = request.limit.unwrap_or(DEFAULT_RESULT_LIMIT);
-        if limit == 0 || limit > MAX_RESULT_LIMIT {
+        if !(MIN_RESULT_LIMIT..=MAX_RESULT_LIMIT).contains(&limit) {
             violations.push(FieldViolation {
                 field: "limit".into(),
-                message: format!("limit must be between 1 and {MAX_RESULT_LIMIT}"),
+                message: format!("limit must be between {MIN_RESULT_LIMIT} and {MAX_RESULT_LIMIT}"),
             });
         }
 
@@ -181,6 +181,25 @@ mod tests {
         })
         .unwrap_err();
         assert_eq!(error.violations[0].field, "page");
+    }
+
+    #[test]
+    fn enforces_the_rest_result_limit_range() {
+        let error = ValidatedSearchRequest::try_from(SearchRequest {
+            query: Some("rust".into()),
+            limit: Some(MIN_RESULT_LIMIT - 1),
+            ..SearchRequest::default()
+        })
+        .unwrap_err();
+        assert_eq!(error.violations[0].field, "limit");
+
+        let validated = ValidatedSearchRequest::try_from(SearchRequest {
+            query: Some("rust".into()),
+            limit: Some(MAX_RESULT_LIMIT),
+            ..SearchRequest::default()
+        })
+        .unwrap();
+        assert_eq!(validated.0.limit, MAX_RESULT_LIMIT);
     }
 
     #[test]

@@ -7,6 +7,8 @@ const MAX_CRAWL_BODY_BYTES = 1024 * 1024;
 const MAX_CRAWL_TEXT_CHARS = 256 * 1024;
 const DEFAULT_CRAWL_PAGES_PER_QUERY = 3;
 const DEFAULT_AI_RESULTS = 5;
+const DEFAULT_API_RESULTS = 10;
+const UI_RESULTS = 20;
 
 const LOGO_SVG = `<?xml version="1.0" encoding="UTF-8"?>
 <svg width="522px" height="149px" viewBox="0 0 522 149" version="1.1" xmlns="http://www.w3.org/2000/svg">
@@ -150,7 +152,7 @@ function urlDetails(raw){
 }
 async function search(query){
   activateResults();status.textContent="Searching…";list.replaceChildren();
-  const response=await fetch("/ui/search?q="+encodeURIComponent(query));
+  const response=await fetch("/ui/search?q="+encodeURIComponent(query)+"&limit=20");
   const body=await response.json();
   if(!response.ok)throw new Error(body.detail||body.message||"Search failed");
   status.textContent=body.result_count+" result"+(body.result_count===1?"":"s")+(body.partial?" · some engines did not respond":"");
@@ -236,13 +238,35 @@ function boundedInteger(value, fallback, minimum, maximum) {
   return Number.isFinite(parsed) ? Math.min(maximum, Math.max(minimum, parsed)) : fallback;
 }
 
-function queryFromRequest(request) {
+async function searchContextFromRequest(request) {
   const url = new URL(request.url);
-  return (url.searchParams.get("q") || url.searchParams.get("query") || "").trim();
+  let query = (url.searchParams.get("q") || url.searchParams.get("query") || "").trim();
+  let limit = url.searchParams.get("limit");
+  if (request.method === "POST" && url.pathname === "/v1/search") {
+    try {
+      const body = await request.clone().json();
+      query = String(body.q || body.query || query).trim();
+      limit = body.limit ?? limit;
+    } catch {
+      // The Rust route returns the canonical invalid-body problem response.
+    }
+  }
+  return {
+    query,
+    limit: url.pathname === "/ui/search"
+      ? UI_RESULTS
+      : boundedInteger(limit, DEFAULT_API_RESULTS, DEFAULT_API_RESULTS, UI_RESULTS),
+  };
 }
 
-function isSearchPath(pathname) {
+function isEnrichableSearchPath(pathname) {
   return pathname === "/v1/search" || pathname === "/ui/search";
+}
+
+function isCrawlableSearchPath(pathname) {
+  return isEnrichableSearchPath(pathname)
+    || pathname === "/search"
+    || /^\/v1\/engines\/[^/]+\/search$/.test(pathname);
 }
 
 function safeCrawlUrl(raw) {
@@ -375,6 +399,47 @@ function lexicalScore(result, query) {
     + 0.05 * Number(result.metadata?.ai_search_score || 0);
 }
 
+function mergeRankedResults(providerResults, aiResults, query, ranking, limit) {
+  const merged = new Map();
+  const add = (result, rank, source) => {
+    const key = result.canonical_url || result.url;
+    if (!key) return;
+    const contribution = 1 / (60 + rank);
+    if (!merged.has(key)) {
+      merged.set(key, {
+        result: structuredClone(result),
+        providerRank: source === "provider" ? rank : Number.POSITIVE_INFINITY,
+        fusionScore: contribution,
+      });
+      return;
+    }
+    const entry = merged.get(key);
+    entry.fusionScore += contribution;
+    if (source === "provider") entry.providerRank = Math.min(entry.providerRank, rank);
+    entry.result.engines = [...new Set([...(entry.result.engines || []), ...(result.engines || [])])];
+    entry.result.positions = { ...(entry.result.positions || {}), ...(result.positions || {}) };
+    entry.result.provider_metadata = {
+      ...(entry.result.provider_metadata || {}),
+      ...(result.provider_metadata || {}),
+    };
+    entry.result.metadata = { ...(entry.result.metadata || {}), ...(result.metadata || {}) };
+  };
+  providerResults.forEach((result, index) => add(result, index + 1, "provider"));
+  aiResults.forEach((result, index) => add(result, index + 1, "index"));
+
+  const entries = [...merged.values()];
+  entries.sort((left, right) => {
+    if (ranking === "query-aware-v1") {
+      const relevance = lexicalScore(right.result, query) - lexicalScore(left.result, query);
+      if (relevance) return relevance;
+    }
+    const fusion = right.fusionScore - left.fusionScore;
+    if (fusion) return fusion;
+    return left.providerRank - right.providerRank;
+  });
+  return entries.slice(0, limit).map(entry => entry.result);
+}
+
 function aiChunkToResult(chunk, position) {
   const metadata = chunk.item?.metadata || {};
   const text = String(chunk.text || "");
@@ -416,23 +481,21 @@ async function aiSearchResults(query, env) {
   return (response.chunks || []).map((chunk, index) => aiChunkToResult(chunk, index + 1)).filter(Boolean);
 }
 
-async function enrichSearchResponse(response, query, env, ctx) {
+async function enrichSearchResponse(response, searchContext, env, ctx, enrich) {
   if (!response.ok || !response.headers.get("content-type")?.includes("application/json")) return response;
   const body = await response.clone().json();
   if (!Array.isArray(body.results)) return response;
   ctx.waitUntil(crawlResults(body.results, env));
+  if (!enrich) return response;
   try {
-    const aiResults = await aiSearchResults(query, env);
-    const merged = new Map();
-    for (const result of [...body.results, ...aiResults]) {
-      const key = result.canonical_url || result.url;
-      if (!merged.has(key)) merged.set(key, result);
-      else {
-        const existing = merged.get(key);
-        existing.engines = [...new Set([...(existing.engines || []), ...(result.engines || [])])];
-      }
-    }
-    body.results = [...merged.values()].sort((left, right) => lexicalScore(right, query) - lexicalScore(left, query)).slice(0, 20);
+    const aiResults = await aiSearchResults(searchContext.query, env);
+    body.results = mergeRankedResults(
+      body.results,
+      aiResults,
+      searchContext.query,
+      body.ranking,
+      searchContext.limit,
+    );
     body.result_count = body.results.length;
     if (aiResults.length) {
       body.resolved_engines = [...new Set([...(body.resolved_engines || []), "ai-search-crawl"])];
@@ -442,7 +505,9 @@ async function enrichSearchResponse(response, query, env, ctx) {
         parser_version: "cloudflare-ai-search-hybrid-rrf-v1",
       }];
     }
-    return new Response(JSON.stringify(body), { status: response.status, headers: response.headers });
+    const headers = new Headers(response.headers);
+    headers.delete("content-length");
+    return new Response(JSON.stringify(body), { status: response.status, headers });
   } catch (error) {
     console.warn(JSON.stringify({ event: "ai_search_failed", message: String(error) }));
     return response;
@@ -454,10 +519,18 @@ export default class extends RustWorker {
     const url = new URL(request.url);
     if (request.method === "GET" && url.pathname === "/") return htmlResponse();
     if (request.method === "GET" && url.pathname === "/assets/searxflarelogo.svg") return logoResponse();
-    const query = queryFromRequest(request);
+    const searchContext = isCrawlableSearchPath(url.pathname)
+      ? await searchContextFromRequest(request)
+      : null;
     const response = await super.fetch(request);
-    return isSearchPath(url.pathname)
-      ? enrichSearchResponse(response, query, this.env, this.ctx)
+    return searchContext
+      ? enrichSearchResponse(
+          response,
+          searchContext,
+          this.env,
+          this.ctx,
+          isEnrichableSearchPath(url.pathname),
+        )
       : response;
   }
 

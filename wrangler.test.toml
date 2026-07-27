@@ -1,33 +1,21 @@
+# Local/workerd integration configuration. Keep remote-only AI Search out of the
+# test runtime; production binding behavior is covered by the deployment dry run
+# and live smoke tests.
 name = "searxflare"
 main = "crates/metasearch-worker/worker/facade.mjs"
 compatibility_date = "2026-07-24"
-workers_dev = true
 
 [vars]
 ENABLE_STARTPAGE = "true"
 ENABLE_GOOGLE = "true"
 ENABLE_SOCKET_HTTP = "false"
 ENABLE_PRIVACY_PROXY_LAB = "false"
-ENABLE_AI_SEARCH = "true"
+ENABLE_AI_SEARCH = "false"
 CRAWL_MAX_PAGES_PER_QUERY = "3"
 AI_SEARCH_MAX_RESULTS = "5"
 
 [build]
 command = "bash scripts/build_worker.sh"
-
-[observability]
-enabled = true
-head_sampling_rate = 1.0
-
-[observability.logs]
-enabled = true
-invocation_logs = true
-persist = true
-
-[observability.traces]
-enabled = true
-head_sampling_rate = 0.1
-persist = true
 
 [[ratelimits]]
 name = "SEARCH_RATE_LIMITER"
@@ -45,9 +33,6 @@ class_name = "ProviderCoordinatorObject"
 tag = "v1-provider-coordinator"
 new_sqlite_classes = ["ProviderCoordinatorObject"]
 
-[triggers]
-crons = ["*/30 * * * *"]
-
 [[analytics_engine_datasets]]
 binding = "SEARCH_ANALYTICS"
 dataset = "searxflare_search"
@@ -63,7 +48,3 @@ id = "ebce1316ffa9422ea79da86b647b1d60"
 [[r2_buckets]]
 binding = "CRAWL_DOCUMENTS"
 bucket_name = "searxflare-crawl-documents"
-
-[[ai_search]]
-binding = "CRAWL_SEARCH"
-instance_name = "searxflare"

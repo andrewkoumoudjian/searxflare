@@ -8,7 +8,7 @@ use metasearch_core::{
     CacheStatus, CursorPayload, CursorSigner, Deadline, EngineContext, EngineExecutionReport,
     EngineFailure, EngineOutput, EngineSecrets, EngineState, FailureKind, NormalizedQuery,
     ProviderCoordinator, RankingStrategy, SafeSearch, SearchEngine, TimeRange,
-    ENGINE_REGISTRY_VERSION,
+    ENGINE_REGISTRY_VERSION, MAX_RESULT_LIMIT,
 };
 use metasearch_engines::{
     default_engine_ids, find_engine, registry, resolve_bangs, BangResolution, RegisteredEngine,
@@ -1075,10 +1075,11 @@ async fn search_get(req: Request, ctx: RouteContext<AppData>) -> worker::Result<
 }
 
 async fn ui_search(req: Request, ctx: RouteContext<AppData>) -> worker::Result<Response> {
-    let request = match request_from_url(&req, false) {
+    let mut request = match request_from_url(&req, false) {
         Ok(request) => request,
         Err(error) => return problem_response(error, &req.path(), &request_id()),
     };
+    request.limit = Some(MAX_RESULT_LIMIT);
     handle_search_request(req, ctx, request, false).await
 }
 

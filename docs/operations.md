@@ -26,7 +26,7 @@ Provider credentials are isolated by binding name: `GITHUB_TOKEN`, `SEMANTIC_SCH
 
 The post-response crawler fetches at most `CRAWL_MAX_PAGES_PER_QUERY` result pages, defaults to three, accepts HTTPS HTML only, caps each transformed body at 1 MiB and retained text at 256 KiB, and keeps at most 64 discovered links. Page freshness markers suppress repeat capture for 24 hours. The scheduled frontier drains four URLs every 30 minutes and stores at most twelve new frontier links per page.
 
-Create `searxflare-crawl` against the `searxflare-crawl-documents` R2 bucket with both vector and keyword indexes, `fusion_method=rrf`, five maximum results, query rewriting off, and reranking off. Keep `ENABLE_AI_SEARCH=false` until indexing is healthy and the `CRAWL_SEARCH` binding is deployed. These settings bound per-query inference to one embedding plus hybrid retrieval; they do not create an unlimited generative-model path.
+The production `searxflare` AI Search instance targets the `searxflare-crawl-documents` R2 bucket with both vector and keyword indexes, `fusion_method=rrf`, query rewriting off, and model reranking off. The Worker requests at most five indexed chunks and applies its deterministic query-aware reranker after merging them with provider results. These settings bound per-query inference to one embedding plus hybrid retrieval; they do not create an unlimited generative-model path.
 
 ## Dashboard queries
 

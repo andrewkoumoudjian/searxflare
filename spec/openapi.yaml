@@ -174,7 +174,7 @@ components:
     Engines:
       name: engines
       in: query
-      schema: { type: string, description: Comma-separated engine IDs; maximum five. }
+      schema: { type: string, description: Comma-separated engine IDs; maximum twenty. }
     Categories:
       name: categories
       in: query
@@ -190,7 +190,7 @@ components:
     Limit:
       name: limit
       in: query
-      schema: { type: integer, minimum: 1, maximum: 20, default: 10 }
+      schema: { type: integer, minimum: 10, maximum: 20, default: 10 }
     Locale:
       name: locale
       in: query
@@ -289,7 +289,7 @@ components:
           items: { type: string }
         page: { type: integer, minimum: 1, default: 1 }
         cursor: { type: string, minLength: 1, maxLength: 4096 }
-        limit: { type: integer, minimum: 1, maximum: 20, default: 10 }
+        limit: { type: integer, minimum: 10, maximum: 20, default: 10 }
         locale: { type: string, maxLength: 35 }
         country: { type: string, minLength: 2, maxLength: 2 }
         safe_search: { $ref: '#/components/schemas/SafeSearch' }

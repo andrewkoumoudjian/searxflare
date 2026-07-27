@@ -51,6 +51,10 @@ function mockProviders({ duckFailure = false, delayArxiv = false, emptyWikipedia
     if (url.hostname === "www.baidu.com") return new Response(BAIDU, { status: 200, headers: { "content-type": "text/html; charset=UTF-8" } });
     if (url.hostname === "www.google.com") return new Response(GOOGLE, { status: 200, headers: { "content-type": "text/html; charset=UTF-8" } });
     if (url.hostname === "api.x.ai") return new Response(GROKIPEDIA, { status: 200, headers: { "content-type": "application/json" } });
+    if (url.hostname === "example.com") return new Response(
+      "<!doctype html><html><head><title>Crawled result</title></head><body><main>Cloudflare crawl index content.</main><a href=\"https://example.com/discovered\">Next page</a></body></html>",
+      { status: 200, headers: { "content-type": "text/html; charset=UTF-8" } },
+    );
     throw new Error(`unexpected outbound request: ${request.url}`);
   });
   vi.stubGlobal("fetch", mock);
@@ -73,6 +77,7 @@ describe("Worker routes", () => {
     expect(html).toContain("transform:translateX(-.35%)");
     expect(html).toContain('class="results-shell"');
     expect(html).toContain("activateResults()");
+    expect(html).toContain('encodeURIComponent(query)+"&limit=20"');
   });
 
   it("serves the supplied Searxflare logo with preserved SVG scaling", async () => {
@@ -85,12 +90,30 @@ describe("Worker routes", () => {
   });
 
   it("lets the rate-limited interface search without exposing the API key", async () => {
-    mockProviders();
+    const mock = mockProviders();
     const response = await exports.default.fetch("https://example.com/ui/search?q=cloudflare");
     expect(response.status).toBe(200);
     const body = await response.json();
     expect(body.results.length).toBeGreaterThan(0);
     expect(body.resolved_engines).toHaveLength(20);
+    const semanticScholarRequest = mock.mock.calls
+      .map(([input, init]) => input instanceof Request ? input : new Request(input, init))
+      .find((request) => new URL(request.url).hostname === "api.semanticscholar.org");
+    expect(new URL(semanticScholarRequest.url).searchParams.get("limit")).toBe("20");
+  });
+
+  it("rejects REST result limits below ten", async () => {
+    const response = await exports.default.fetch(new Request(
+      "https://example.com/v1/search?q=cloudflare&limit=9",
+      { headers: AUTH },
+    ));
+    expect(response.status).toBe(400);
+    const body = await response.json();
+    expect(body.code).toBe("INVALID_REQUEST");
+    expect(body.errors).toContainEqual({
+      field: "limit",
+      message: "limit must be between 10 and 20",
+    });
   });
 
   it("serves unauthenticated health checks", async () => {
@@ -200,7 +223,7 @@ describe("Worker routes", () => {
 
   it("aggregates the first provider tranche", async () => {
     const mock = mockProviders();
-    const response = await exports.default.fetch(new Request("https://example.com/v1/search?q=cloudflare&page=2&limit=7&engines=mojeek-web,yahoo-web,qwant-web", { headers: AUTH }));
+    const response = await exports.default.fetch(new Request("https://example.com/v1/search?q=cloudflare&page=2&limit=10&engines=mojeek-web,yahoo-web,qwant-web", { headers: AUTH }));
     expect(response.status).toBe(200);
     const body = await response.json();
     expect(body.partial).toBe(false);
@@ -209,13 +232,13 @@ describe("Worker routes", () => {
     expect(new URL(requests.find((request) => new URL(request.url).hostname === "www.mojeek.com").url).searchParams.get("s")).toBe("10");
     expect(new URL(requests.find((request) => new URL(request.url).hostname.endsWith("search.yahoo.com")).url).searchParams.get("b")).toBe("15");
     const qwant = new URL(requests.find((request) => new URL(request.url).hostname === "api.qwant.com").url);
-    expect(qwant.searchParams.get("count")).toBe("7");
-    expect(qwant.searchParams.get("offset")).toBe("7");
+    expect(qwant.searchParams.get("count")).toBe("10");
+    expect(qwant.searchParams.get("offset")).toBe("10");
   });
 
   it("aggregates the remaining public providers", async () => {
     const mock = mockProviders();
-    const response = await exports.default.fetch(new Request("https://example.com/v1/search?q=cloudflare&page=2&limit=7&engines=yandex-web,baidu-web,google-web,grokipedia", { headers: AUTH }));
+    const response = await exports.default.fetch(new Request("https://example.com/v1/search?q=cloudflare&page=2&limit=10&engines=yandex-web,baidu-web,google-web,grokipedia", { headers: AUTH }));
     expect(response.status).toBe(200);
     const body = await response.json();
     expect(body.partial).toBe(false);
@@ -224,13 +247,13 @@ describe("Worker routes", () => {
     expect(new URL(requests.find((request) => new URL(request.url).hostname === "yandex.com").url).searchParams.get("p")).toBe("1");
     const baidu = new URL(requests.find((request) => new URL(request.url).hostname === "www.baidu.com").url);
     expect(baidu.searchParams.get("pn")).toBe("10");
-    expect(baidu.searchParams.get("rn")).toBe("7");
+    expect(baidu.searchParams.get("rn")).toBe("10");
     const google = new URL(requests.find((request) => new URL(request.url).hostname === "www.google.com").url);
     expect(google.searchParams.get("start")).toBe("10");
-    expect(google.searchParams.get("num")).toBe("7");
+    expect(google.searchParams.get("num")).toBe("10");
     const grokipedia = new URL(requests.find((request) => new URL(request.url).hostname === "api.x.ai").url);
-    expect(grokipedia.searchParams.get("limit")).toBe("7");
-    expect(grokipedia.searchParams.get("offset")).toBe("7");
+    expect(grokipedia.searchParams.get("limit")).toBe("10");
+    expect(grokipedia.searchParams.get("offset")).toBe("10");
   });
 
   it("aggregates explicit academic providers", async () => {
@@ -289,5 +312,28 @@ describe("Worker routes", () => {
       .filter((request) => new URL(request.url).pathname === "/w/api.php");
     expect(wikipediaSearchCalls).toHaveLength(1);
     await waitOnExecutionContext(secondCtx);
+  });
+
+  it("crawls successful results after the response and records index state", async () => {
+    mockProviders();
+    const ctx = createExecutionContext();
+    const worker = new WorkerEntrypoint(ctx, env);
+    const response = await worker.fetch(new Request(
+      "https://example.com/v1/search?q=crawl-index&engines=qwant-web",
+      { headers: AUTH },
+    ));
+    expect(response.status).toBe(200);
+    await waitOnExecutionContext(ctx);
+
+    const documents = await env.CRAWL_DOCUMENTS.list({ prefix: "documents/" });
+    expect(documents.objects.length).toBeGreaterThan(0);
+    const stored = await env.CRAWL_DOCUMENTS.get(documents.objects[0].key);
+    expect(await stored.text()).toContain("Cloudflare crawl index content.");
+
+    const frontier = await env.CRAWL_STATE.list({ prefix: "frontier:" });
+    expect(frontier.keys.length).toBeGreaterThan(0);
+    const scheduledKey = frontier.keys[0].name;
+    await worker.scheduled();
+    expect(await env.CRAWL_STATE.get(scheduledKey)).toBeNull();
   });
 });

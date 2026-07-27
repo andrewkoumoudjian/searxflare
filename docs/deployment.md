@@ -27,10 +27,9 @@ Generate the Ed25519 private key offline and store only its base64url-encoded
 32-byte seed as a secret. Never put the private key in KV or repository config.
 
 The production configuration binds `ENGINE_STATE`, `CRAWL_STATE`,
-`CRAWL_DOCUMENTS`, and `SEARCH_ANALYTICS`. AI Search remains independently
-gated: create the `searxflare-crawl` R2-backed instance, confirm its index is
-healthy, add the `CRAWL_SEARCH` instance binding, and only then set
-`ENABLE_AI_SEARCH=true`.
+`CRAWL_DOCUMENTS`, `CRAWL_SEARCH`, and `SEARCH_ANALYTICS`. The `searxflare`
+AI Search instance indexes the R2 crawl corpus and must report a healthy indexing
+state before `ENABLE_AI_SEARCH=true` is deployed.
 
 ## Cloudflare Workers Builds
 
