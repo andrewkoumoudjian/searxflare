@@ -30,7 +30,7 @@ pub static DESCRIPTOR: EngineDescriptor = EngineDescriptor {
     max_redirects: DEFAULT_MAX_REDIRECTS,
     weight: 1.05,
     parser_version: "qwant-web-json-v2",
-    default_enabled: false,
+    default_enabled: true,
     allow_http: false,
     state_policy: StatePolicy::Stateless,
     cache_policy: CachePolicy {

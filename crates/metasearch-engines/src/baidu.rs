@@ -31,7 +31,7 @@ pub static DESCRIPTOR: EngineDescriptor = EngineDescriptor {
     max_redirects: DEFAULT_MAX_REDIRECTS,
     weight: 0.9,
     parser_version: "baidu-web-html-v1",
-    default_enabled: false,
+    default_enabled: true,
     allow_http: false,
     state_policy: StatePolicy::Stateless,
     cache_policy: CachePolicy {

@@ -12,8 +12,8 @@ pub const DEFAULT_MAX_STEPS: u8 = 3;
 pub const DEFAULT_MAX_REDIRECTS: u8 = 2;
 pub const DEFAULT_RESULT_LIMIT: u8 = 10;
 pub const MAX_RESULT_LIMIT: u8 = 20;
-pub const DEFAULT_ENGINE_COUNT: usize = 3;
-pub const MAX_ENGINE_COUNT: usize = 5;
+pub const DEFAULT_ENGINE_COUNT: usize = 20;
+pub const MAX_ENGINE_COUNT: usize = 20;
 pub const MAX_CATEGORY_COUNT: usize = 3;
 pub const MAX_TOTAL_UPSTREAM_REQUESTS: u8 = 8;
 

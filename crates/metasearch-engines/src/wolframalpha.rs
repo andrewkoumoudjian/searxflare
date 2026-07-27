@@ -30,7 +30,7 @@ pub static DESCRIPTOR: EngineDescriptor = EngineDescriptor {
     max_redirects: DEFAULT_MAX_REDIRECTS,
     weight: 1.15,
     parser_version: "wolframalpha-v2-json-v1",
-    default_enabled: false,
+    default_enabled: true,
     allow_http: false,
     state_policy: StatePolicy::DurableCoordinator,
     cache_policy: CachePolicy {

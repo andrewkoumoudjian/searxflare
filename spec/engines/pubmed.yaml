@@ -22,5 +22,5 @@ cache:
   response_ttl_seconds: 900
   negative_ttl_seconds: 30
 state: stateless
-default_enabled: false
+default_enabled: true
 notes: Uses the public NCBI EUtils ESearch and ESummary JSON endpoints as a bounded two-step pipeline. It preserves PMID, DOI, PMCID, authors, journal, publication type and publication date metadata.

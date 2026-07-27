@@ -22,5 +22,5 @@ cache:
   response_ttl_seconds: 180
   negative_ttl_seconds: 30
 state: stateless
-default_enabled: false
+default_enabled: true
 notes: Uses the public HTML frontend with fixed hosts, zero-based bounded paging, language selection, streaming lol-html parsing, and explicit changed-layout detection. Default-disabled because challenge behavior from Cloudflare egress is not yet validated.

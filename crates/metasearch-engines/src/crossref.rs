@@ -31,7 +31,7 @@ pub static DESCRIPTOR: EngineDescriptor = EngineDescriptor {
     max_redirects: DEFAULT_MAX_REDIRECTS,
     weight: 1.3,
     parser_version: "crossref-works-json-v1",
-    default_enabled: false,
+    default_enabled: true,
     allow_http: false,
     state_policy: StatePolicy::Stateless,
     cache_policy: CachePolicy {

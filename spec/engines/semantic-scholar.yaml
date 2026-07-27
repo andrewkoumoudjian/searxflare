@@ -22,5 +22,5 @@ cache:
   response_ttl_seconds: 900
   negative_ttl_seconds: 30
 state: stateless
-default_enabled: false
+default_enabled: true
 notes: Uses the public Semantic Scholar Academic Graph relevance search without requiring an API key. Results are capped to the provider's first 1000 relevance-ranked records, and shared unauthenticated rate limits remain an operational limitation.

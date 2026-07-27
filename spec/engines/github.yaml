@@ -22,5 +22,5 @@ cache:
   response_ttl_seconds: 300
   negative_ttl_seconds: 30
 state: stateless
-default_enabled: false
+default_enabled: true
 notes: Uses the public GitHub REST repository search endpoint with bounded page and per_page parameters, stable client identification, the current API version header, strict JSON validation, and independent rate-limit classification. It remains default-disabled until Cloudflare preview egress is validated. The separately supplied values github, 3.0, and 1.0 were not interpreted as configuration.

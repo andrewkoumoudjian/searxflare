@@ -184,10 +184,12 @@ mod tests {
     }
 
     #[test]
-    fn rejects_more_than_five_engines() {
+    fn rejects_more_than_maximum_engines() {
         let error = ValidatedSearchRequest::try_from(SearchRequest {
             query: Some("rust".into()),
-            engines: (0..6).map(|index| format!("engine-{index}")).collect(),
+            engines: (0..=MAX_ENGINE_COUNT)
+                .map(|index| format!("engine-{index}"))
+                .collect(),
             ..SearchRequest::default()
         })
         .unwrap_err();

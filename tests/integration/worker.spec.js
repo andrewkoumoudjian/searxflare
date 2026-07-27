@@ -64,14 +64,30 @@ describe("Worker routes", () => {
     const response = await exports.default.fetch("https://example.com/");
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toContain("text/html");
-    expect(await response.text()).toContain("Searxflare");
+    const html = await response.text();
+    expect(html).toContain("Searxflare");
+    expect(html).toContain("/assets/searxflarelogo.svg");
+    expect(html).toContain("@paper-design/shaders@0.0.77");
+    expect(html).toContain('class="results-shell"');
+    expect(html).toContain("activateResults()");
+  });
+
+  it("serves the supplied Searxflare logo with preserved SVG scaling", async () => {
+    const response = await exports.default.fetch("https://example.com/assets/searxflarelogo.svg");
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain("image/svg+xml");
+    const svg = await response.text();
+    expect(svg).toContain('viewBox="0 0 522 149"');
+    expect(svg).toContain("knowledge is power.");
   });
 
   it("lets the rate-limited interface search without exposing the API key", async () => {
     mockProviders();
     const response = await exports.default.fetch("https://example.com/ui/search?q=cloudflare");
     expect(response.status).toBe(200);
-    expect((await response.json()).results.length).toBeGreaterThan(0);
+    const body = await response.json();
+    expect(body.results.length).toBeGreaterThan(0);
+    expect(body.resolved_engines).toHaveLength(20);
   });
 
   it("serves unauthenticated health checks", async () => {
@@ -114,6 +130,7 @@ describe("Worker routes", () => {
     expect(body.engines.map((engine) => engine.id)).toEqual([
       "arxiv", "wikipedia", "duckduckgo-html", "brave-web", "brave-news", "qwant-web", "pubmed", "semantic-scholar", "crossref", "github", "mojeek-web", "yahoo-web", "yandex-web", "baidu-web", "google-web", "grokipedia", "wolframalpha", "openalex", "exa-mcp", "startpage-web"
     ]);
+    expect(body.engines.every((engine) => engine.default_enabled)).toBe(true);
   });
 
   it("returns UNKNOWN_ENGINE for unsupported IDs", async () => {
@@ -131,7 +148,7 @@ describe("Worker routes", () => {
     expect(body.ranking).toBe("query-aware-v1");
     expect(body.results.length).toBeGreaterThanOrEqual(3);
     expect(body.engines.some((engine) => engine.failure_kind === "ENGINE_CHALLENGED")).toBe(true);
-    expect(body.engines.map((engine) => engine.engine_id)).not.toContain("qwant-web");
+    expect(body.engines.map((engine) => engine.engine_id)).toContain("qwant-web");
     expect(body.results.every((result) => Object.keys(result.provider_metadata).length >= 1)).toBe(true);
   });
 
@@ -145,7 +162,7 @@ describe("Worker routes", () => {
     expect(body.bangs).toEqual(["web"]);
     expect(body.resolved_categories).toEqual(["general"]);
     expect(body.resolved_engines).toEqual(expect.arrayContaining(["duckduckgo-html", "brave-web"]));
-    expect(body.resolved_engines).not.toContain("qwant-web");
+    expect(body.resolved_engines).toContain("qwant-web");
   });
 
   it("supports the GitHub bang alias", async () => {
@@ -264,7 +281,10 @@ describe("Worker routes", () => {
     const second = await secondWorker.fetch(request());
     expect(second.status).toBe(200);
     expect((await second.json()).cached).toBe(true);
-    expect(mock).toHaveBeenCalledTimes(1);
+    const wikipediaSearchCalls = mock.mock.calls
+      .map(([input, init]) => input instanceof Request ? input : new Request(input, init))
+      .filter((request) => new URL(request.url).pathname === "/w/api.php");
+    expect(wikipediaSearchCalls).toHaveLength(1);
     await waitOnExecutionContext(secondCtx);
   });
 });

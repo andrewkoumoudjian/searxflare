@@ -279,7 +279,7 @@ components:
           description: Alias for query.
         engines:
           type: array
-          maxItems: 5
+          maxItems: 20
           uniqueItems: true
           items: { type: string, pattern: '^[a-z0-9-]+$' }
         categories:

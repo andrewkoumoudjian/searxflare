@@ -7,57 +7,197 @@ const MAX_CRAWL_TEXT_CHARS = 256 * 1024;
 const DEFAULT_CRAWL_PAGES_PER_QUERY = 3;
 const DEFAULT_AI_RESULTS = 5;
 
+const LOGO_SVG = `<?xml version="1.0" encoding="UTF-8"?>
+<svg width="522px" height="149px" viewBox="0 0 522 149" version="1.1" xmlns="http://www.w3.org/2000/svg">
+  <title>SearxFlare — knowledge is power.</title>
+  <g stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+    <text font-family="Gambarino-Regular, Gambarino" font-size="120" font-weight="normal" fill="#000000">
+      <tspan x="0" y="96">SearxFlare</tspan>
+    </text>
+    <text font-family="SFPro-Regular, SF Pro" font-size="48" font-weight="normal" fill="#000000">
+      <tspan x="55" y="137">knowledge is power.</tspan>
+    </text>
+  </g>
+</svg>`;
+
 const HOME_HTML = `<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="icon" href="/assets/searxflarelogo.svg?v=2" type="image/svg+xml">
   <title>Searxflare</title>
   <style>
-    :root{color-scheme:light;font-family:Arial,Helvetica,sans-serif;color:#202124}
-    *{box-sizing:border-box}body{margin:0;background:#fff}
-    main{width:min(720px,calc(100% - 32px));margin:0 auto;padding:18vh 0 72px}
-    h1{text-align:center;font-size:clamp(2.8rem,9vw,5.2rem);font-weight:500;letter-spacing:-.08em;margin:0 0 34px}
-    h1 span:nth-child(1),h1 span:nth-child(4){color:#4285f4}h1 span:nth-child(2),h1 span:nth-child(6){color:#ea4335}
-    h1 span:nth-child(3){color:#fbbc05}h1 span:nth-child(5){color:#34a853}
-    form{display:flex;align-items:center;border:1px solid #dfe1e5;border-radius:24px;padding:4px 6px 4px 18px;box-shadow:0 1px 6px rgba(32,33,36,.12)}
-    form:focus-within{box-shadow:0 1px 8px rgba(32,33,36,.24)}
-    input{border:0;outline:0;flex:1;font-size:16px;padding:10px 4px;background:transparent}
-    button{border:0;border-radius:20px;background:#1a73e8;color:#fff;font-weight:600;padding:10px 18px;cursor:pointer}
-    #status{min-height:22px;margin:24px 4px 8px;color:#5f6368}
-    ol{list-style:none;padding:0;margin:0}.result{margin:0 0 28px}
-    .url{color:#202124;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-    a{font-size:20px;color:#1a0dab;text-decoration:none}a:hover{text-decoration:underline}
-    p{margin:6px 0 0;line-height:1.55;color:#4d5156}.engines{font-size:12px;color:#70757a;margin-top:5px}
-    @media(max-width:520px){main{padding-top:11vh}h1{margin-bottom:26px}button{padding-inline:13px}}
+    :root{
+      color-scheme:light;
+      --paper-rgb:246 246 243;
+      --paper:rgb(var(--paper-rgb));
+      --ink:#171816;
+      --ink-muted:rgb(23 24 22 / 62%);
+      --ink-faint:rgb(23 24 22 / 13%);
+      --surface:rgb(255 255 255 / 76%);
+      --blue:#1a0dab;
+      --blue-hover:#174ea6;
+      --ease-out:cubic-bezier(.23,1,.32,1);
+      font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","SF Pro Display","Helvetica Neue",Helvetica,Arial,sans-serif;
+      color:var(--ink);
+      background:var(--paper);
+      font-synthesis:none;
+      text-rendering:optimizeLegibility;
+      -webkit-font-smoothing:antialiased;
+    }
+    *{box-sizing:border-box}
+    html{min-height:100%;overflow-x:hidden;overflow-x:clip;background:var(--paper)}
+    body{min-height:100vh;min-height:100svh;margin:0;overflow-x:hidden;background:var(--paper)}
+    button,input{font:inherit}
+    button{-webkit-tap-highlight-color:transparent}
+    .dither-backdrop{position:fixed;z-index:0;inset:0;overflow:hidden;opacity:.62;pointer-events:none;transition:opacity 360ms var(--ease-out)}
+    .dither-backdrop::before{position:absolute;inset:0;background-image:radial-gradient(circle,rgb(135 144 154 / 64%) 0 .7px,transparent .9px);background-position:center;background-size:6px 6px;mask-image:radial-gradient(ellipse 92% 92% at 64% 20%,#000 0,transparent 100%);content:"";opacity:.48}
+    .dither-backdrop canvas{width:100%!important;height:100%!important;opacity:0;animation:shader-enter 700ms var(--ease-out) forwards}
+    @keyframes shader-enter{to{opacity:1}}
+    body.has-results .dither-backdrop{opacity:.08}
+    .page{position:relative;z-index:1;min-height:100vh;min-height:100svh}
+    .search-shell{width:min(720px,calc(100% - 32px));margin:0 auto;padding-top:clamp(7.5rem,22vh,13rem);transition:width 360ms var(--ease-out),margin 360ms var(--ease-out),padding 360ms var(--ease-out)}
+    .search-layout{position:relative;isolation:isolate}
+    .search-layout::before{position:absolute;z-index:-1;inset:-4rem -6rem;background:rgb(var(--paper-rgb) / 28%);content:"";mask-image:radial-gradient(ellipse 100% 74% at center,rgb(0 0 0 / 42%) 0%,rgb(0 0 0 / 26%) 46%,transparent 100%);pointer-events:none}
+    .brand-link{display:block;width:clamp(17rem,42vw,28rem);margin:0 auto 2.4rem;color:inherit}
+    .brand{display:block;width:100%;height:auto;clip-path:inset(1px);mix-blend-mode:multiply}
+    .search-form{display:flex;min-height:48px;border:1px solid rgb(23 24 22 / 14%);border-radius:24px;align-items:center;padding:3px 7px 3px 17px;background:var(--surface);box-shadow:0 1px 2px rgb(23 24 22 / 5%),0 4px 18px rgb(23 24 22 / 8%);backdrop-filter:blur(16px);transition:border-color 180ms ease,box-shadow 180ms ease,background 180ms ease}
+    .search-form:focus-within,.search-form:hover{border-color:rgb(23 24 22 / 20%);background:rgb(255 255 255 / 88%);box-shadow:0 1px 2px rgb(23 24 22 / 6%),0 6px 22px rgb(23 24 22 / 11%)}
+    .search-input{min-width:0;border:0;outline:0;flex:1;padding:9px 4px;background:transparent;color:var(--ink);font-size:1rem;letter-spacing:-.01em;line-height:1.45}
+    .search-input::-webkit-search-cancel-button{display:none}
+    .search-actions{display:flex;align-items:center}
+    .icon-button{display:inline-grid;width:40px;height:40px;border:0;border-radius:50%;place-items:center;background:transparent;color:rgb(23 24 22 / 58%);cursor:pointer;transition:background 150ms ease,color 150ms ease}
+    .icon-button:hover{background:rgb(23 24 22 / 6%);color:var(--ink)}
+    .icon-button:focus-visible,.result-link:focus-visible,.brand-link:focus-visible{outline:2px solid #1a73e8;outline-offset:3px}
+    .clear-button[hidden]{display:none}
+    .submit-button{color:var(--ink)}
+    .icon{width:20px;height:20px;fill:none;stroke:currentColor;stroke-linecap:round;stroke-linejoin:round;stroke-width:1.8}
+    .results-shell{width:min(680px,calc(100% - 32px));margin:0 auto;padding:0 0 5rem;opacity:0;transform:translateY(12px);transition:opacity 240ms ease 80ms,transform 300ms var(--ease-out)}
+    .status{min-height:22px;margin:1.25rem 0 1.5rem;color:var(--ink-muted);font-size:.875rem;line-height:1.55}
+    .results{list-style:none;margin:0;padding:0}
+    .result{margin:0 0 2rem}
+    .result-source{display:grid;grid-template-columns:28px minmax(0,1fr);grid-template-rows:auto auto;column-gap:.7rem;margin-bottom:.3rem;align-items:center}
+    .result-favicon{grid-row:1/3;display:grid;width:28px;height:28px;border:1px solid var(--ink-faint);border-radius:50%;place-items:center;background:rgb(255 255 255 / 70%);color:var(--ink);font-size:.78rem;font-weight:600;text-transform:uppercase}
+    .result-site{overflow:hidden;color:var(--ink);font-size:.875rem;line-height:1.3;text-overflow:ellipsis;white-space:nowrap}
+    .result-url{overflow:hidden;color:var(--ink-muted);font-size:.75rem;line-height:1.35;text-overflow:ellipsis;white-space:nowrap}
+    .result-link{display:inline-block;color:var(--blue);font-family:"SF Pro Display",-apple-system,BlinkMacSystemFont,"Helvetica Neue",sans-serif;font-size:1.25rem;font-weight:400;letter-spacing:-.018em;line-height:1.3;text-decoration:none}
+    .result-link:hover{color:var(--blue-hover);text-decoration:underline;text-underline-offset:.13em}
+    .result-snippet{display:-webkit-box;max-width:640px;margin:.32rem 0 0;overflow:hidden;color:#3c4043;font-size:.875rem;line-height:1.58;-webkit-box-orient:vertical;-webkit-line-clamp:4}
+    .result-engines{margin-top:.35rem;color:var(--ink-muted);font-size:.72rem;line-height:1.4}
+    .empty-state{padding:1.5rem 0;color:var(--ink-muted);line-height:1.6}
+    body.has-results .search-shell{width:auto;margin:0;padding:1rem 1.5rem .9rem;border-bottom:1px solid var(--ink-faint);background:rgb(var(--paper-rgb) / 90%);backdrop-filter:blur(14px)}
+    body.has-results .search-layout{display:grid;grid-template-columns:112px minmax(280px,680px) 1fr;gap:1.5rem;align-items:center}
+    body.has-results .brand-link{width:112px;margin:0}
+    body.has-results .results-shell{margin-left:calc(112px + 3rem);opacity:1;transform:none}
+    @media(max-width:760px){
+      .search-shell{padding-top:clamp(5.25rem,16vh,8rem)}
+      .brand-link{width:min(20rem,82vw)}
+      body.has-results .search-shell{padding:.75rem 1rem}
+      body.has-results .search-layout{grid-template-columns:1fr;gap:.65rem}
+      body.has-results .brand-link{width:106px;margin-left:.3rem}
+      body.has-results .results-shell{margin:0 auto}
+      .status{margin-top:1rem}
+    }
+    @media(max-width:420px){
+      .search-shell,.results-shell{width:calc(100% - 24px)}
+      .search-form{padding-left:13px}
+      .result-snippet{-webkit-line-clamp:5}
+    }
+    @media(prefers-reduced-motion:reduce){
+      *,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+    }
   </style>
 </head>
 <body>
-<main>
-  <h1 aria-label="Searxflare"><span>S</span><span>e</span><span>a</span><span>r</span><span>x</span><span>flare</span></h1>
-  <form id="search"><input id="q" name="q" type="search" autocomplete="off" autofocus required aria-label="Search"><button>Search</button></form>
-  <div id="status" role="status"></div><ol id="results"></ol>
+<div id="dither" class="dither-backdrop" aria-hidden="true"></div>
+<main class="page">
+  <header class="search-shell">
+    <div class="search-layout">
+      <a class="brand-link" href="/" aria-label="Searxflare home">
+        <img class="brand" src="/assets/searxflarelogo.svg?v=2" width="522" height="149" alt="SearxFlare — knowledge is power.">
+      </a>
+      <form id="search" class="search-form" role="search">
+        <input id="q" class="search-input" name="q" type="search" autocomplete="off" autofocus required aria-label="Search">
+        <div class="search-actions">
+          <button id="clear" class="icon-button clear-button" type="button" aria-label="Clear search" hidden>
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"/></svg>
+          </button>
+          <button class="icon-button submit-button" type="submit" aria-label="Search">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.4"/><path d="m16 16 4 4"/></svg>
+          </button>
+        </div>
+      </form>
+    </div>
+  </header>
+  <section class="results-shell" aria-label="Search results">
+    <div id="status" class="status" role="status" aria-live="polite"></div>
+    <ol id="results" class="results"></ol>
+  </section>
 </main>
 <script>
-const form=document.querySelector("#search"),input=document.querySelector("#q"),status=document.querySelector("#status"),list=document.querySelector("#results");
+const form=document.querySelector("#search"),input=document.querySelector("#q"),clear=document.querySelector("#clear"),status=document.querySelector("#status"),list=document.querySelector("#results");
 function addText(parent,tag,text,className){const node=document.createElement(tag);if(className)node.className=className;node.textContent=text;parent.append(node);return node}
+function activateResults(){document.body.classList.add("has-results")}
+function updateClear(){clear.hidden=!input.value}
+function urlDetails(raw){
+  try{
+    const parsed=new URL(raw);
+    const host=parsed.hostname.replace(/^www\\./,"");
+    const parts=parsed.pathname.split("/").filter(Boolean).slice(0,3).map(part=>{try{return decodeURIComponent(part).replace(/[-_]/g," ")}catch{return part}});
+    return {host:host,label:host.split(".")[0],trail:host+(parts.length?" › "+parts.join(" › "):"")};
+  }catch{return {host:raw,label:"W",trail:raw}}
+}
 async function search(query){
-  status.textContent="Searching…";list.replaceChildren();
+  activateResults();status.textContent="Searching…";list.replaceChildren();
   const response=await fetch("/ui/search?q="+encodeURIComponent(query));
   const body=await response.json();
   if(!response.ok)throw new Error(body.detail||body.message||"Search failed");
   status.textContent=body.result_count+" result"+(body.result_count===1?"":"s")+(body.partial?" · some engines did not respond":"");
+  if(!body.results.length){addText(list,"li","No results matched your search. Try different keywords.","empty-state");return}
   for(const result of body.results){
     const item=document.createElement("li");item.className="result";
-    addText(item,"div",result.canonical_url||result.url,"url");
-    const link=addText(item,"a",result.title||result.url);link.href=result.url;link.rel="noopener noreferrer";
-    if(result.content)addText(item,"p",result.content);
-    if(result.engines?.length)addText(item,"div",result.engines.join(" · "),"engines");
+    const details=urlDetails(result.canonical_url||result.url);
+    const source=document.createElement("div");source.className="result-source";
+    addText(source,"span",(details.label[0]||"W").toUpperCase(),"result-favicon");
+    addText(source,"span",details.host,"result-site");
+    addText(source,"span",details.trail,"result-url");
+    item.append(source);
+    const link=addText(item,"a",result.title||result.url,"result-link");link.href=result.url;link.rel="noopener noreferrer";
+    if(result.content)addText(item,"p",result.content,"result-snippet");
+    if(result.engines?.length)addText(item,"div",result.engines.join(" · "),"result-engines");
     list.append(item);
   }
 }
-form.addEventListener("submit",event=>{event.preventDefault();const query=input.value.trim();if(!query)return;history.replaceState(null,"","/?q="+encodeURIComponent(query));search(query).catch(error=>status.textContent=error.message)});
-const initial=new URL(location.href).searchParams.get("q");if(initial){input.value=initial;search(initial).catch(error=>status.textContent=error.message)}
+form.addEventListener("submit",event=>{event.preventDefault();const query=input.value.trim();if(!query)return;activateResults();history.pushState({query:query},"","/?q="+encodeURIComponent(query));search(query).catch(error=>status.textContent=error.message)});
+input.addEventListener("input",updateClear);
+clear.addEventListener("click",()=>{input.value="";updateClear();input.focus()});
+window.addEventListener("popstate",()=>{const query=new URL(location.href).searchParams.get("q");if(query){input.value=query;updateClear();search(query).catch(error=>status.textContent=error.message)}else{document.body.classList.remove("has-results");input.value="";updateClear();status.textContent="";list.replaceChildren()}});
+const initial=new URL(location.href).searchParams.get("q");if(initial){input.value=initial;updateClear();activateResults();search(initial).catch(error=>status.textContent=error.message)}
+async function initShader(){
+  if(window.matchMedia("(prefers-reduced-motion: reduce)").matches||window.matchMedia("(prefers-reduced-data: reduce)").matches)return;
+  try{
+    const shaders=await import("https://esm.sh/@paper-design/shaders@0.0.77");
+    const mount=new shaders.ShaderMount(document.querySelector("#dither"),shaders.ditheringFragmentShader,{
+      u_colorBack:shaders.getShaderColorFromString("#f6f6f3"),
+      u_colorFront:shaders.getShaderColorFromString("#87909a"),
+      u_shape:shaders.DitheringShapes.simplex,
+      u_type:shaders.DitheringTypes.random,
+      u_pxSize:1.65,
+      u_fit:0,
+      u_scale:.92,
+      u_rotation:-10,
+      u_originX:.5,
+      u_originY:.5,
+      u_offsetX:.14,
+      u_offsetY:-.24,
+      u_worldWidth:0,
+      u_worldHeight:0
+    },undefined,.46,0,1,window.innerWidth<=700?400000:800000);
+    window.addEventListener("pagehide",()=>mount.dispose(),{once:true});
+  }catch(error){console.warn("Shader fallback active",error)}
+}
+void initShader();
 </script>
 </body>
 </html>`;
@@ -69,7 +209,17 @@ function htmlResponse() {
       "cache-control": "public, max-age=300",
       "x-content-type-options": "nosniff",
       "referrer-policy": "no-referrer",
-      "content-security-policy": "default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
+      "content-security-policy": "default-src 'self'; img-src 'self'; script-src 'unsafe-inline' https://esm.sh; style-src 'unsafe-inline'; connect-src 'self' https://esm.sh; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
+    },
+  });
+}
+
+function logoResponse() {
+  return new Response(LOGO_SVG, {
+    headers: {
+      "content-type": "image/svg+xml; charset=utf-8",
+      "cache-control": "public, max-age=86400",
+      "x-content-type-options": "nosniff",
     },
   });
 }
@@ -296,6 +446,7 @@ export default class extends RustWorker {
   async fetch(request) {
     const url = new URL(request.url);
     if (request.method === "GET" && url.pathname === "/") return htmlResponse();
+    if (request.method === "GET" && url.pathname === "/assets/searxflarelogo.svg") return logoResponse();
     const query = queryFromRequest(request);
     const response = await super.fetch(request);
     return isSearchPath(url.pathname)

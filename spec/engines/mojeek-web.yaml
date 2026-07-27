@@ -22,5 +22,5 @@ cache:
   response_ttl_seconds: 180
   negative_ttl_seconds: 30
 state: stateless
-default_enabled: false
+default_enabled: true
 notes: Uses the public HTML frontend with fixed hosts, bounded paging, locale cookies, safe-search, date filters, streaming lol-html parsing, and explicit changed-layout detection. Default-disabled pending Cloudflare preview egress validation.

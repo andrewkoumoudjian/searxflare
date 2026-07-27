@@ -22,5 +22,5 @@ cache:
   response_ttl_seconds: 900
   negative_ttl_seconds: 60
 state: durable_coordinator
-default_enabled: false
+default_enabled: true
 notes: Uses the official JSON Query API with WOLFRAM_APP_ID supplied through the provider-scoped secret boundary and shared provider cooldown.

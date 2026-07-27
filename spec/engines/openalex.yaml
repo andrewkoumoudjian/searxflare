@@ -22,5 +22,5 @@ cache:
   response_ttl_seconds: 900
   negative_ttl_seconds: 30
 state: stateless
-default_enabled: false
+default_enabled: true
 notes: Uses the official Works search endpoint with OPENALEX_API_KEY supplied through the provider-scoped secret boundary.

@@ -22,5 +22,5 @@ cache:
   response_ttl_seconds: 180
   negative_ttl_seconds: 30
 state: stateless
-default_enabled: false
+default_enabled: true
 notes: Uses the fixed public frontend JSON endpoint with the caller's smaller bounded result limit capped at ten, matching page offsets, locale, safe-search and explicit challenge or rate-limit classification. Cloudflare preview egress was challenged on 2026-07-25, so the provider remains explicit opt-in without bypass behavior.

@@ -50,7 +50,7 @@ The compile-time catalogue contains twenty engines:
 - Exa Streamable HTTP MCP
 - Startpage HTML
 
-Only the established default set is used when no engines or categories are selected. New, authenticated, and provider-controlled adapters remain default-disabled until their latency, rate-limit, schema and Cloudflare egress behavior are validated. Google and Startpage additionally require `ENABLE_GOOGLE=true` and `ENABLE_STARTPAGE=true`. A provider failure is isolated and surfaced through partial-result metadata.
+All registered engines are selected when no engines or categories are specified. Google and Startpage remain controlled by `ENABLE_GOOGLE` and `ENABLE_STARTPAGE`, which are enabled in the production Worker configuration. Engines without available credentials or upstream access fail independently and are surfaced through partial-result metadata.
 
 All HTML adapters use the repository's bounded streaming `lol-html` parser. They do not execute a browser, solve CAPTCHAs, rotate proxies, impersonate random clients, or accept user-defined destinations. Challenge, denial, changed-layout, rate-limit and empty-result states are classified independently.
 

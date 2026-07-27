@@ -22,5 +22,5 @@ cache:
   response_ttl_seconds: 180
   negative_ttl_seconds: 30
 state: stateless
-default_enabled: false
+default_enabled: true
 notes: Uses a compile-time regional host map, bounded paging, locale and safe-search cookies, day/week/month filters, tracking-URL unwrapping, streaming lol-html parsing, and explicit changed-layout detection. Default-disabled pending Cloudflare preview egress validation.

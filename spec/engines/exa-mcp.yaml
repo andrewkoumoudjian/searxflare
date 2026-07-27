@@ -22,5 +22,5 @@ cache:
   response_ttl_seconds: 300
   negative_ttl_seconds: 60
 state: stateless
-default_enabled: false
+default_enabled: true
 notes: Bounded Streamable HTTP MCP adapter that initializes a session and invokes web_search_exa using EXA_API_KEY without exposing arbitrary tools, methods, hosts, or headers.

@@ -22,5 +22,5 @@ cache:
   response_ttl_seconds: 900
   negative_ttl_seconds: 30
 state: stateless
-default_enabled: false
+default_enabled: true
 notes: Uses the public Crossref REST works search with bounded rows and offset. It preserves DOI, authors, publication date, container, publisher and citation metadata, and strips upstream JATS markup from abstracts.

@@ -4,8 +4,8 @@ compatibility_date = "2026-07-24"
 workers_dev = true
 
 [vars]
-ENABLE_STARTPAGE = "false"
-ENABLE_GOOGLE = "false"
+ENABLE_STARTPAGE = "true"
+ENABLE_GOOGLE = "true"
 ENABLE_SOCKET_HTTP = "false"
 ENABLE_PRIVACY_PROXY_LAB = "false"
 ENABLE_AI_SEARCH = "false"
