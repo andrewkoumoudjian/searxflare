@@ -30,7 +30,7 @@ pub static DESCRIPTOR: EngineDescriptor = EngineDescriptor {
     max_steps: DEFAULT_MAX_STEPS,
     max_redirects: DEFAULT_MAX_REDIRECTS,
     weight: 1.1,
-    parser_version: "brave-web-html-v1",
+    parser_version: "brave-web-html-v2",
     default_enabled: true,
     allow_http: false,
     state_policy: StatePolicy::Stateless,
@@ -43,9 +43,9 @@ pub static DESCRIPTOR: EngineDescriptor = EngineDescriptor {
 
 const SELECTORS: SelectorResultSpec = SelectorResultSpec {
     no_results: Some(".no-results, #no-results, .search-no-results"),
-    item: "div.snippet",
-    title: "div.title",
-    url: "a",
+    item: "div.snippet[data-type=\"web\"]",
+    title: "div.search-snippet-title",
+    url: "a.l1",
     description: Some("div.content"),
     thumbnail: Some("a.thumbnail img"),
 };

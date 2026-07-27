@@ -12,7 +12,7 @@ const ARXIV = `<?xml version="1.0" encoding="UTF-8"?>
 const WIKIPEDIA = JSON.stringify({ batchcomplete: true, query: { pages: [{ pageid: 42, ns: 0, title: "Cloudflare", extract: "Reference result.", fullurl: "https://en.wikipedia.org/wiki/Cloudflare" }] } });
 const EMPTY_WIKIPEDIA = JSON.stringify({ batchcomplete: true });
 const DUCKDUCKGO = `<!doctype html><html><body><div id="links"><div class="web-result"><h2><a href="https://duckduckgo.com/l/?uddg=https%3A%2F%2Fexample.com%2Fcloudflare">Example result</a></h2><a class="result__snippet">Web result.</a></div></div></body></html>`;
-const BRAVE = `<!doctype html><html><body><div class="snippet"><a href="https://example.com/brave"><div class="title">Brave result</div></a><div class="content">Brave web result.</div></div></body></html>`;
+const BRAVE = `<!doctype html><html><body><div class="snippet" data-type="web"><a class="l1" href="https://example.com/brave"><div class="title search-snippet-title">Brave result</div></a><div class="content">Brave web result.</div></div></body></html>`;
 const QWANT = JSON.stringify({ status: "success", data: { result: { items: { mainline: [{ type: "web", items: [{ title: "Qwant result", url: "https://example.com/qwant", desc: "Qwant web result.", source: "example.com" }] }] } } } });
 const PUBMED_SEARCH = JSON.stringify({ esearchresult: { idlist: ["12345678"] } });
 const PUBMED_SUMMARY = JSON.stringify({ result: { uids: ["12345678"], "12345678": { title: "Food safety and Worker systems", sortpubdate: "2026/06/15 00:00", source: "J Edge Med", fulljournalname: "Journal of Edge Medicine", authors: [{ name: "Ada Example" }], pubtype: ["Journal Article"], articleids: [{ idtype: "doi", value: "10.1234/pubmed.example" }] } } });

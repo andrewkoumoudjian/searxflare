@@ -17,7 +17,7 @@ limits:
   max_steps: 3
   max_redirects: 2
 versions:
-  parser: brave-web-html-v1
+  parser: brave-web-html-v2
 cache:
   response_ttl_seconds: 180
   negative_ttl_seconds: 30
