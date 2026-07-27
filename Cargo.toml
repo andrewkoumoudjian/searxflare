@@ -20,8 +20,10 @@ repository = "https://github.com/andrewkoumoudjian/searxflare"
 [workspace.dependencies]
 async-trait = "0.1.89"
 base64 = "0.22.1"
+entropy-map = "1.1.0"
 futures-util = "0.3.31"
 hmac = "0.12.1"
+indexmap = "2.12.1"
 js-sys = "0.3.82"
 lol_html = "3.0.0"
 quick-xml = { version = "0.41.0", features = ["serialize"] }
@@ -35,6 +37,8 @@ url = { version = "2.5.7", features = ["serde"] }
 uuid = { version = "1.18.1", features = ["v4", "js"] }
 wasm-bindgen = "0.2.105"
 worker = "0.8.5"
+web-bot-auth = "0.7.0"
+wildcard = "0.3.0"
 
 [profile.release]
 codegen-units = 1

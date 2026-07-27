@@ -41,7 +41,15 @@ pub static DESCRIPTOR: EngineDescriptor = EngineDescriptor {
     bot_auth_policy: BotAuthPolicy::Disabled,
 };
 
+#[cfg(test)]
 fn build_request(query: &NormalizedQuery) -> Result<EngineRequest, EngineFailure> {
+    build_request_with_mailto(query, None)
+}
+
+fn build_request_with_mailto(
+    query: &NormalizedQuery,
+    mailto: Option<&str>,
+) -> Result<EngineRequest, EngineFailure> {
     if query.time_range.is_some() {
         return Err(EngineFailure::new(
             DESCRIPTOR.id,
@@ -64,10 +72,16 @@ fn build_request(query: &NormalizedQuery) -> Result<EngineRequest, EngineFailure
     let mut url = Url::parse("https://api.crossref.org/works").map_err(|error| {
         EngineFailure::new(DESCRIPTOR.id, FailureKind::Internal, error.to_string())
     })?;
-    url.query_pairs_mut()
-        .append_pair("query.bibliographic", &query.text)
-        .append_pair("rows", &rows.to_string())
-        .append_pair("offset", &offset.to_string());
+    {
+        let mut pairs = url.query_pairs_mut();
+        pairs
+            .append_pair("query.bibliographic", &query.text)
+            .append_pair("rows", &rows.to_string())
+            .append_pair("offset", &offset.to_string());
+        if let Some(mailto) = mailto {
+            pairs.append_pair("mailto", mailto);
+        }
+    }
 
     Ok(EngineRequest {
         method: EngineMethod::Get,
@@ -254,7 +268,8 @@ impl SearchEngine for CrossrefEngine {
         query: &NormalizedQuery,
         context: &EngineContext<'_>,
     ) -> Result<EngineOutput, EngineFailure> {
-        let request = build_request(query)?;
+        let mailto = context.secrets.get(DESCRIPTOR.id, "mailto");
+        let request = build_request_with_mailto(query, mailto.as_deref())?;
         let response = context
             .http
             .send(&DESCRIPTOR, request, context.deadline)
@@ -262,6 +277,7 @@ impl SearchEngine for CrossrefEngine {
         let results = parse_results(&response.body)?;
         Ok(EngineOutput {
             results,
+            next_cursor: None,
             upstream_requests: 1,
             response_bytes: response.body.len(),
             parse_ms: 0,

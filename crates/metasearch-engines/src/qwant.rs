@@ -260,6 +260,7 @@ impl SearchEngine for QwantEngine {
 
         Ok(EngineOutput {
             results,
+            next_cursor: None,
             upstream_requests: 1,
             response_bytes: response.body.len(),
             parse_ms: 0,

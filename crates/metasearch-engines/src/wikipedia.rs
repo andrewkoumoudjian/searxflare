@@ -224,6 +224,7 @@ impl SearchEngine for WikipediaEngine {
         let results = parse_results(&response.body)?;
         Ok(EngineOutput {
             results,
+            next_cursor: None,
             upstream_requests: 1,
             response_bytes: response.body.len(),
             parse_ms: 0,

@@ -1,6 +1,6 @@
 use crate::{
     BoundedResponse, Deadline, EngineDescriptor, EngineFailure, EngineOutput, EngineRequest,
-    NormalizedQuery,
+    NormalizedQuery, ProviderCoordinatorCommand, ProviderCoordinatorSnapshot,
 };
 
 #[async_trait::async_trait(?Send)]
@@ -28,9 +28,25 @@ pub trait EngineState {
     async fn delete(&self, engine_id: &str, key: &str) -> Result<(), EngineFailure>;
 }
 
+pub trait EngineSecrets {
+    fn get(&self, engine_id: &str, name: &str) -> Option<String>;
+}
+
+#[async_trait::async_trait(?Send)]
+pub trait ProviderCoordinator {
+    async fn execute(
+        &self,
+        engine_id: &str,
+        command: ProviderCoordinatorCommand,
+    ) -> Result<ProviderCoordinatorSnapshot, EngineFailure>;
+}
+
 pub struct EngineContext<'a> {
     pub http: &'a dyn EngineHttpClient,
     pub state: &'a dyn EngineState,
+    pub secrets: &'a dyn EngineSecrets,
+    pub coordinator: &'a dyn ProviderCoordinator,
+    pub now_ms: u64,
     pub deadline: Deadline,
     pub request_id: &'a str,
 }

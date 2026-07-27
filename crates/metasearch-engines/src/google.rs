@@ -1,8 +1,9 @@
 use metasearch_core::{
     BotAuthPolicy, CachePolicy, EngineCapabilities, EngineContext, EngineDescriptor, EngineFailure,
     EngineMaturity, EngineMethod, EngineOutput, EngineRequest, FailureKind, NormalizedQuery,
-    ProviderResult, SafeSearch, SearchEngine, SourceKind, StatePolicy, TimeRange,
-    DEFAULT_MAX_BODY_BYTES, DEFAULT_MAX_REDIRECTS, DEFAULT_MAX_STEPS, HTML_ENGINE_TIMEOUT_MS,
+    ProviderCoordinatorCommand, ProviderResult, SafeSearch, SearchEngine, SourceKind, StatePolicy,
+    TimeRange, DEFAULT_MAX_BODY_BYTES, DEFAULT_MAX_REDIRECTS, DEFAULT_MAX_STEPS,
+    HTML_ENGINE_TIMEOUT_MS,
 };
 use metasearch_parsers::{parse_selector_results, SelectorResultSpec};
 use serde_json::Map;
@@ -33,12 +34,12 @@ pub static DESCRIPTOR: EngineDescriptor = EngineDescriptor {
     parser_version: "google-web-html-v1",
     default_enabled: false,
     allow_http: false,
-    state_policy: StatePolicy::Stateless,
+    state_policy: StatePolicy::DurableCoordinator,
     cache_policy: CachePolicy {
         response_ttl_seconds: 120,
         negative_ttl_seconds: 30,
     },
-    bot_auth_policy: BotAuthPolicy::Disabled,
+    bot_auth_policy: BotAuthPolicy::Optional,
 };
 
 const SELECTORS: SelectorResultSpec = SelectorResultSpec {
@@ -189,15 +190,68 @@ impl SearchEngine for GoogleEngine {
         query: &NormalizedQuery,
         context: &EngineContext<'_>,
     ) -> Result<EngineOutput, EngineFailure> {
+        let snapshot = context
+            .coordinator
+            .execute(
+                DESCRIPTOR.id,
+                ProviderCoordinatorCommand::Snapshot {
+                    now_ms: context.now_ms,
+                },
+            )
+            .await?;
+        if snapshot
+            .cooldown_expires_at_ms
+            .is_some_and(|expiry| expiry > context.now_ms)
+        {
+            return Err(EngineFailure::new(
+                DESCRIPTOR.id,
+                FailureKind::EngineRateLimited,
+                "Google is in a shared provider cooldown",
+            ));
+        }
         let request = build_request(query)?;
         let request_url = request.url.clone();
-        let response = context
+        let response = match context
             .http
             .send(&DESCRIPTOR, request, context.deadline)
-            .await?;
+            .await
+        {
+            Ok(response) => response,
+            Err(failure) => {
+                if matches!(
+                    failure.kind,
+                    FailureKind::EngineRateLimited
+                        | FailureKind::EngineChallenged
+                        | FailureKind::EngineAccessDenied
+                ) {
+                    let _ = context
+                        .coordinator
+                        .execute(
+                            DESCRIPTOR.id,
+                            ProviderCoordinatorCommand::RecordFailure {
+                                now_ms: context.now_ms,
+                                failure_kind: failure.kind.as_code().into(),
+                                cooldown_ms: 300_000,
+                            },
+                        )
+                        .await;
+                }
+                return Err(failure);
+            }
+        };
         let results = parse_results(&response.body, &request_url)?;
+        let _ = context
+            .coordinator
+            .execute(
+                DESCRIPTOR.id,
+                ProviderCoordinatorCommand::RecordSuccess {
+                    now_ms: context.now_ms,
+                },
+            )
+            .await;
         Ok(EngineOutput {
             results,
+            next_cursor: None,
             upstream_requests: 1,
             response_bytes: response.body.len(),
             parse_ms: 0,

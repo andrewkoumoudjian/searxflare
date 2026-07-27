@@ -18,4 +18,6 @@ pub use error::{EngineFailure, FailureKind};
 pub use model::*;
 pub use query::{normalize_query, QueryNormalizationError};
 pub use ranking::{rank_results, RankingError};
-pub use traits::{EngineContext, EngineHttpClient, EngineState, SearchEngine};
+pub use traits::{
+    EngineContext, EngineHttpClient, EngineSecrets, EngineState, ProviderCoordinator, SearchEngine,
+};

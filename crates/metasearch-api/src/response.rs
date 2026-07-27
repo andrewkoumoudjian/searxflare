@@ -16,6 +16,8 @@ pub struct SearchResponse {
     pub partial: bool,
     pub cached: bool,
     pub result_count: usize,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub next_cursor: Option<String>,
     pub results: Vec<NormalizedResult>,
     pub engines: Vec<EngineExecutionReport>,
 }

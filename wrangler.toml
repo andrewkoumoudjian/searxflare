@@ -1,20 +1,71 @@
 name = "searxflare"
-main = "crates/metasearch-worker/build/worker/shim.mjs"
+main = "crates/metasearch-worker/worker/facade.mjs"
 compatibility_date = "2026-07-24"
 workers_dev = true
+
+[vars]
+ENABLE_STARTPAGE = "false"
+ENABLE_GOOGLE = "false"
+ENABLE_SOCKET_HTTP = "false"
+ENABLE_PRIVACY_PROXY_LAB = "false"
+ENABLE_AI_SEARCH = "false"
+CRAWL_MAX_PAGES_PER_QUERY = "3"
+AI_SEARCH_MAX_RESULTS = "5"
 
 [build]
 command = "bash scripts/build_worker.sh"
 
 [observability]
 enabled = true
+head_sampling_rate = 1.0
 
-# Optional production bindings. The Worker continues without them in local development.
-# [[analytics_engine_datasets]]
-# binding = "SEARCH_ANALYTICS"
-# dataset = "searxflare_search"
-#
-# [[kv_namespaces]]
-# binding = "ENGINE_STATE"
-# id = "replace-with-production-kv-id"
-# preview_id = "replace-with-preview-kv-id"
+[observability.logs]
+enabled = true
+invocation_logs = true
+persist = true
+
+[observability.traces]
+enabled = true
+head_sampling_rate = 0.1
+persist = true
+
+[[ratelimits]]
+name = "SEARCH_RATE_LIMITER"
+namespace_id = "1001"
+
+[ratelimits.simple]
+limit = 60
+period = 60
+
+[[durable_objects.bindings]]
+name = "PROVIDER_COORDINATOR"
+class_name = "ProviderCoordinatorObject"
+
+[[migrations]]
+tag = "v1-provider-coordinator"
+new_sqlite_classes = ["ProviderCoordinatorObject"]
+
+[triggers]
+crons = ["*/30 * * * *"]
+
+[[analytics_engine_datasets]]
+binding = "SEARCH_ANALYTICS"
+dataset = "searxflare_search"
+
+[[kv_namespaces]]
+binding = "ENGINE_STATE"
+id = "4668aaf9eb0842faab5ba52773eeb9bf"
+
+[[kv_namespaces]]
+binding = "CRAWL_STATE"
+id = "ebce1316ffa9422ea79da86b647b1d60"
+
+[[r2_buckets]]
+binding = "CRAWL_DOCUMENTS"
+bucket_name = "searxflare-crawl-documents"
+
+# Activate after the deploy identity has AI Search:Edit and AI Search:Run,
+# the `searxflare-crawl` instance exists, and its R2 index is healthy.
+# [[ai_search]]
+# binding = "CRAWL_SEARCH"
+# instance_name = "searxflare-crawl"

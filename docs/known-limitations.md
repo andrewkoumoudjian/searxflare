@@ -1,25 +1,25 @@
 # Known limitations
 
-- DuckDuckGo HTML supports only the first page; VQD continuation is out of scope.
-- Brave Web, Qwant Web, Mojeek, Yahoo, Yandex, Baidu and Google use provider-controlled public search or frontend contracts rather than supported public APIs. Grokipedia uses a provider-controlled JSON surface. Selector or schema changes may disable any of these engines until fixtures and parsers are updated.
+- DuckDuckGo HTML continuation uses short-lived, query-bound VQD state carried inside the signed public cursor. Expired cursors must restart at page one.
+- Brave Web, Brave News, Qwant Web, Mojeek, Yahoo, Yandex, Baidu, Google and Startpage use provider-controlled public search or frontend contracts rather than supported public APIs. Grokipedia uses a provider-controlled JSON surface. Selector or schema changes may disable any of these engines until fixtures and parsers are updated.
 - Brave Web is capped at ten pages and Qwant Web at five pages. The remaining public-provider adapters also bound paging, but upstream result windows and regional behavior remain provider-controlled. Qwant Web does not expose a stable time-range parameter.
 - Qwant DataDome cookie persistence is not implemented. Cloudflare preview egress was challenged during validation on 2026-07-25, so Qwant remains stateless and default-disabled. Explicit requests classify the challenge without bypassing it.
-- PubMed, Semantic Scholar, Crossref, GitHub, Qwant, Mojeek, Yahoo, Yandex, Baidu, Google and Grokipedia are default-disabled and must be selected explicitly. They use public provider capacity and can independently challenge, rate-limit or deny Worker egress.
+- PubMed, Semantic Scholar, Crossref, GitHub, Qwant, Mojeek, Yahoo, Yandex, Baidu, Google, Grokipedia, Brave News, WolframAlpha, OpenAlex, Exa and Startpage are default-disabled and must be selected explicitly. They can independently challenge, rate-limit or deny Worker egress.
 - Yahoo and Google tracking wrappers are decoded locally without following secondary requests. Baidu tracking links are returned without secondary resolution, so a result may still navigate through Baidu.
 - Yahoo locale support is limited to its compile-time regional host map. Mojeek, Yahoo, Yandex, Baidu and Google locale, region, SafeSearch and time-filter mappings are best-effort translations to provider-controlled request parameters and cookies.
 - Grokipedia search is unauthenticated and requires a top-level JSON result array. Rate-limit responses or schema drift are classified as provider failures rather than retried.
-- GitHub repository search is unauthenticated in the current slice because provider-scoped secrets are not yet exposed to engines. It uses GitHub's separate public search rate-limit bucket and must not be enabled by default until Cloudflare preview egress and observed limits are validated.
+- GitHub repository search uses `GITHUB_TOKEN` when configured and otherwise falls back to GitHub's unauthenticated public search bucket.
 - PubMed uses a shared-deadline two-request ESearch-to-ESummary flow. The current result content uses summary and journal metadata rather than fetching full abstracts through a third request.
-- Semantic Scholar uses its unauthenticated shared rate pool and caps relevance paging at the first 1,000 results. Provider API-key support is not yet wired into the engine boundary.
-- Crossref requests do not yet include an operator `mailto` parameter because no service contact address is configured.
-- OpenAlex and production Exa MCP are deferred because they require provider-scoped authentication and the engine boundary does not yet expose provider secrets. Exa additionally requires a bounded MCP transport adapter or an explicitly approved direct API adapter.
+- Semantic Scholar uses `SEMANTIC_SCHOLAR_API_KEY` when configured, otherwise its unauthenticated shared rate pool, and caps relevance paging at the first 1,000 results.
+- Crossref adds the operator `mailto` only when `CROSSREF_MAILTO` is configured.
+- OpenAlex, WolframAlpha and Exa are disabled when their provider credentials are absent. Exa intentionally supports only initialization and `web_search_exa`, not arbitrary MCP tools.
 - `query-aware-v1` is deterministic lexical reranking, not semantic model inference. It uses the bang-stripped provider query, title/content/URL token coverage, exact phrase matching, provider contribution data and relative freshness. It cannot infer synonyms or intent beyond those signals.
-- The current `!books` profile resolves to Crossref only; additional book-specific engines are not yet implemented.
+- The current `!books` profile resolves to Crossref and OpenAlex; OpenAlex is skipped as a classified provider failure when its key is absent.
 - Wikipedia locale support is currently restricted to English, French, German and Spanish compile-time hosts.
-- Search cursors have a signing interface but no public opaque-cursor flow yet.
+- Search cursors require `CURSOR_SIGNING_KEY`, expire after fifteen minutes, and are bound to the normalized query and engine selection.
 - Provider parse duration and response byte measures are approximated in the current slices.
 - Analytics Engine and KV are optional and not configured by default.
 - Cache API is local to the serving PoP and is not globally coherent.
 - Provider availability from local Wrangler does not prove availability from production Worker egress.
 - A successful dry-run or preview deployment does not prove production account bindings or authenticated live search.
-- There is no frontend, image/video search, browser rendering, paid API integration, proxy rotation or CAPTCHA solving.
+- There is no frontend, image/video search, browser rendering, proxy rotation or CAPTCHA solving. Paid provider capacity is used only when the operator configures the corresponding credentials.

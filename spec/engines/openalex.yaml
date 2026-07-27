@@ -1,0 +1,26 @@
+id: openalex
+display_name: OpenAlex
+endpoint: https://api.openalex.org/works
+method: GET
+categories: [science]
+source_kind: json
+allowed_hosts: [api.openalex.org]
+capabilities:
+  paging: true
+  locale: false
+  country: false
+  safe_search: false
+  time_range: false
+limits:
+  timeout_ms: 2500
+  max_body_bytes: 2097152
+  max_steps: 3
+  max_redirects: 2
+versions:
+  parser: openalex-works-json-v1
+cache:
+  response_ttl_seconds: 900
+  negative_ttl_seconds: 30
+state: stateless
+default_enabled: false
+notes: Uses the official Works search endpoint with OPENALEX_API_KEY supplied through the provider-scoped secret boundary.

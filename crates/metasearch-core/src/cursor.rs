@@ -7,6 +7,7 @@ use std::fmt::{Display, Formatter};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CursorPayload {
+    pub query_hash: String,
     pub page: u32,
     #[serde(default)]
     pub engine_cursors: BTreeMap<String, String>,
@@ -86,6 +87,7 @@ mod tests {
     fn signs_and_validates_cursor() {
         let signer = CursorSigner::new(b"test signing key");
         let payload = CursorPayload {
+            query_hash: "query-hash".into(),
             page: 2,
             engine_cursors: BTreeMap::new(),
             expires_at_ms: 2_000,
@@ -98,6 +100,7 @@ mod tests {
     fn rejects_tampering() {
         let signer = CursorSigner::new(b"test signing key");
         let payload = CursorPayload {
+            query_hash: "query-hash".into(),
             page: 2,
             engine_cursors: BTreeMap::new(),
             expires_at_ms: 2_000,

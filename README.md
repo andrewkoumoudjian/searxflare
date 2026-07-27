@@ -1,33 +1,39 @@
 # Searxflare
 
-Searxflare is an API-only metasearch engine written in Rust for Cloudflare Workers. It compiles to `wasm32-unknown-unknown`, queries fixed public provider endpoints through Workers Fetch, normalises and deduplicates results, reranks the combined set against the user's original search query, and returns deterministic JSON.
+Searxflare is a metasearch engine written in Rust for Cloudflare Workers. It compiles to `wasm32-unknown-unknown`, queries fixed public provider endpoints through Workers Fetch, normalises and deduplicates results, reranks the combined set against the user's original search query, returns deterministic JSON, and serves a small same-origin search interface at `/`.
 
 The canonical system design is [`architecture.md`](architecture.md). Public contracts live under [`spec/`](spec/).
 
 ## Implemented production slices
 
 - `workers-rs` Router entrypoint
-- bearer API-key authentication for `/v1/*`
+- bearer API-key authentication for every search and `/v1/*` route
 - RFC 9457-style problem responses and request IDs
 - `/healthz`, `/readyz`, `/v1/search`, engine catalogue/debug routes and SearXNG-compatible JSON route
 - compile-time engine and bang registries
 - restricted HTTPS-only outbound transport with host allow-lists, manual redirects, deadlines, bounded bodies, content-type checks and challenge classification
 - Cache API for aggregate, per-engine and negative responses
-- stateless and KV engine-state adapters plus a Durable Object coordinator contract
+- stateless and KV engine-state adapters plus a sharded Durable Object provider coordinator
+- per-client Workers Rate Limiting, signed public cursors and shared provider cooldowns
+- provider-scoped credentials and optional Web Bot Auth request signing
 - engine-agnostic public results with provider metadata namespaced by engine ID
 - deterministic `query-aware-v1` reranking after normalization and canonical-URL deduplication
 - explicit `rrf-v1` and `searx-compat-v1` compatibility ranking modes
 - SearXNG-style compile-time bangs for engine, category and profile selection
 - structured logs and optional Analytics Engine events
+- a public Google-inspired UI backed by the separately rate-limited `/ui/search` route
+- bounded post-response page capture into R2 with a KV-backed crawl frontier
+- optional Cloudflare AI Search retrieval using hybrid vector/BM25 search and reciprocal rank fusion
 
 ## Engine catalogue
 
-The compile-time catalogue contains fifteen engines:
+The compile-time catalogue contains twenty engines:
 
 - arXiv Atom
 - Wikipedia Action API JSON
 - DuckDuckGo HTML
 - Brave Web HTML
+- Brave News HTML
 - Qwant Web JSON
 - PubMed JSON
 - Semantic Scholar JSON
@@ -39,8 +45,12 @@ The compile-time catalogue contains fifteen engines:
 - Baidu HTML
 - Google HTML
 - Grokipedia JSON
+- WolframAlpha Full Results JSON
+- OpenAlex Works JSON
+- Exa Streamable HTTP MCP
+- Startpage HTML
 
-Only the established default set is used when no engines or categories are selected. GitHub, academic providers, Qwant, Mojeek, Yahoo, Yandex, Baidu, Google and Grokipedia remain default-disabled until their provider-specific latency, rate-limit, schema and Cloudflare egress behavior are validated. A provider failure is isolated and surfaced through partial-result metadata.
+Only the established default set is used when no engines or categories are selected. New, authenticated, and provider-controlled adapters remain default-disabled until their latency, rate-limit, schema and Cloudflare egress behavior are validated. Google and Startpage additionally require `ENABLE_GOOGLE=true` and `ENABLE_STARTPAGE=true`. A provider failure is isolated and surfaced through partial-result metadata.
 
 All HTML adapters use the repository's bounded streaming `lol-html` parser. They do not execute a browser, solve CAPTCHAs, rotate proxies, impersonate random clients, or accept user-defined destinations. Challenge, denial, changed-layout, rate-limit and empty-result states are classified independently.
 
@@ -48,7 +58,7 @@ Qwant honors smaller caller limits while capping requests at its ten-result page
 
 GitHub repository search is available through explicit engine selection or `!gh`. It uses the public REST repository-search endpoint with a fixed host, bounded paging, stable client identification and rate-limit classification. The standalone request values `github`, `3.0` and `1.0` were not interpreted as weights, versions or timeouts.
 
-Exa MCP is researched but not registered in this slice. Its Streamable HTTP lifecycle and production `x-api-key` require provider-scoped secret plumbing and an MCP transport boundary that the current one-request engine abstraction does not expose. No header rotation or rate-limit evasion is implemented.
+Exa MCP uses a fixed two-request Streamable HTTP lifecycle and only invokes `web_search_exa`; its host, method, tool and arguments remain bounded. OpenAlex, WolframAlpha and Exa require their provider-scoped secrets. No header rotation or rate-limit evasion is implemented.
 
 ## Query selection and ranking
 
@@ -66,12 +76,19 @@ Supported aliases include:
 - `!ya` / `!yandex`
 - `!bd` / `!baidu`
 - `!google`
+- `!news` / `!brave-news`
+- `!wa` / `!wolfram`
+- `!openalex`
+- `!exa`
+- `!sp` / `!startpage`
 - `!grok` / `!grokipedia`
 - `!ddg`, `!brave`, `!qw`, `!qwant`, `!pubmed`, `!ss`, `!semantic-scholar`, `!cr` and `!crossref`
 
 Multiple engine bangs may be combined, as may compatible category aliases. Mixing an engine bang with a category bang is rejected deterministically. Unknown bangs and bang-only queries return `INVALID_REQUEST`. Prefix a bang with `\` to keep it as literal query text.
 
-After every provider result is normalized and exact canonical-URL duplicates are merged, `query-aware-v1` scores the combined set using title and content relevance, exact phrase and token coverage, provider position and weight, independent-engine support, canonical-URL terms and bounded relative freshness. It is deterministic and model-free, so it runs within the Worker request path.
+After every provider result is normalized and exact canonical-URL duplicates are merged, `query-aware-v1` scores the combined set using title and content relevance, exact phrase and token coverage, provider position and weight, independent-engine support, canonical-URL terms and bounded relative freshness. Cloudflare's `entropy-map` provides compact exact-token membership and `wildcard` handles normalized prefix matches. The ranking remains deterministic and model-free, so it runs within the Worker request path.
+
+Successful UI and API searches schedule a bounded crawl after the response. The facade uses Cloudflare's streaming HTMLRewriter, which is backed by `lol-html`, captures text and outbound HTTPS links, stores one Markdown document per page in `searxflare-crawl-documents`, and records discovered links in `CRAWL_STATE`. A scheduled handler drains four frontier URLs every 30 minutes. When the optional `CRAWL_SEARCH` binding is active, its results join the provider set using hybrid retrieval with RRF; query rewriting and reranking stay disabled and each query requests at most five chunks.
 
 ## Prerequisites
 
@@ -108,6 +125,7 @@ Create `.dev.vars` and never commit it:
 
 ```text
 API_KEY_SHA256=<lowercase SHA-256 hex of the bearer key>
+CURSOR_SIGNING_KEY=<long random signing secret>
 ```
 
 Generate a hash:

@@ -38,7 +38,7 @@ pub static DESCRIPTOR: EngineDescriptor = EngineDescriptor {
         response_ttl_seconds: 180,
         negative_ttl_seconds: 30,
     },
-    bot_auth_policy: BotAuthPolicy::Disabled,
+    bot_auth_policy: BotAuthPolicy::Optional,
 };
 
 const SELECTORS: SelectorResultSpec = SelectorResultSpec {
@@ -197,6 +197,7 @@ impl SearchEngine for BraveEngine {
 
         Ok(EngineOutput {
             results,
+            next_cursor: None,
             upstream_requests: 1,
             response_bytes: response.body.len(),
             parse_ms: 0,

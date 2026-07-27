@@ -1,0 +1,26 @@
+id: brave-news
+display_name: Brave News
+endpoint: https://search.brave.com/news
+method: GET
+categories: [news]
+source_kind: html
+allowed_hosts: [search.brave.com]
+capabilities:
+  paging: true
+  locale: true
+  country: true
+  safe_search: true
+  time_range: true
+limits:
+  timeout_ms: 3500
+  max_body_bytes: 2097152
+  max_steps: 3
+  max_redirects: 2
+versions:
+  parser: brave-news-html-v1
+cache:
+  response_ttl_seconds: 120
+  negative_ttl_seconds: 30
+state: durable_coordinator
+default_enabled: false
+notes: Fixed-host Brave News HTML adapter with bounded paging, safe-search and date filters, shared cooldown, and optional Web Bot Auth signing.

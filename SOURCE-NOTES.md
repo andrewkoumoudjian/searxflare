@@ -82,7 +82,35 @@ GitHub uses a fixed host, stable repository-identifying User-Agent, bounded `pag
 - Transport: Streamable HTTP
 - Production authentication: `x-api-key`
 
-The current engine abstraction models bounded provider HTTP requests and does not implement MCP initialization, capability negotiation, tool discovery or tool invocation. Production Exa also needs provider-scoped secret plumbing. Exa is therefore intentionally not registered in this slice. The next Exa slice must add a narrowly bounded MCP transport adapter or an explicitly approved direct API adapter. A 429 must be honored; rotating identities or headers to evade limits is out of scope.
+The original public-provider slice deferred Exa because the engine abstraction
+did not expose provider-scoped secrets or an MCP lifecycle. The stateful slice
+below resolves those boundaries with a fixed-host, fixed-tool Streamable HTTP
+adapter. A 429 is honored; rotating identities or headers to evade limits
+remains out of scope.
+
+## Stateful, authenticated and experimental providers
+
+The 2026-07-27 stateful slice adds provider-scoped secret access without exposing
+the raw Worker environment to engines. GitHub and Semantic Scholar use their
+documented request headers when credentials are configured; Crossref adds the
+operator `mailto`; OpenAlex uses the official `/works?search=` endpoint and
+`api_key` parameter documented at
+https://developers.openalex.org/api-reference/authentication.
+
+WolframAlpha uses the official Full Results API v2 query endpoint with JSON
+output and plaintext pods as documented at
+https://products.wolframalpha.com/api/documentation. Brave News and Startpage
+remain clean-room, fixed-host public-frontend adapters and are default-disabled.
+
+Exa uses the official Streamable HTTP server at `https://mcp.exa.ai/mcp`, the
+documented `x-api-key` header, and only the documented `web_search_exa` tool:
+https://exa.ai/docs/reference/exa-mcp. The adapter has a fixed two-request
+initialize/call lifecycle, a fixed tool name, bounded arguments and no arbitrary
+MCP method, tool, host or header surface.
+
+Web Bot Auth signing uses Cloudflare's Apache-2.0 `web-bot-auth` Rust crate and
+the published Ed25519 HTTP Message Signatures flow. Private keys remain Worker
+secrets; only the public directory and agent card are served.
 
 ## Supplied Rust repository assessment
 

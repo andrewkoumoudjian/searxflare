@@ -5,8 +5,52 @@ use metasearch_core::{
 use url::Url;
 
 const CHALLENGE_SCAN_LIMIT: usize = 64 * 1024;
-#[derive(Debug, Default, Clone, Copy)]
-pub struct WorkerFetchClient;
+
+#[derive(Debug, Clone)]
+pub struct BotAuthConfig {
+    pub key_id: String,
+    pub directory_url: String,
+    #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+    private_key: [u8; 32],
+}
+
+impl BotAuthConfig {
+    pub fn from_base64(
+        key_id: impl Into<String>,
+        directory_url: impl Into<String>,
+        encoded_private_key: &str,
+    ) -> Result<Self, String> {
+        use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
+        let decoded = URL_SAFE_NO_PAD
+            .decode(encoded_private_key.trim())
+            .map_err(|error| error.to_string())?;
+        let private_key = decoded
+            .try_into()
+            .map_err(|_| "Web Bot Auth private key must contain exactly 32 bytes".to_string())?;
+        let directory_url = directory_url.into();
+        let url = Url::parse(&directory_url).map_err(|error| error.to_string())?;
+        if url.scheme() != "https" || url.host_str().is_none() {
+            return Err("Web Bot Auth directory URL must be an absolute HTTPS URL".into());
+        }
+        Ok(Self {
+            key_id: key_id.into(),
+            directory_url,
+            private_key,
+        })
+    }
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct WorkerFetchClient {
+    #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+    bot_auth: Option<BotAuthConfig>,
+}
+
+impl WorkerFetchClient {
+    pub const fn new(bot_auth: Option<BotAuthConfig>) -> Self {
+        Self { bot_auth }
+    }
+}
 
 pub fn validate_destination(
     engine: &'static EngineDescriptor,
@@ -133,11 +177,25 @@ pub fn classify_challenge(engine_id: &str, status: u16, body: &[u8]) -> Option<E
 mod wasm {
     use super::*;
     use futures_util::{future::Either, pin_mut, TryStreamExt};
+    use indexmap::IndexMap;
     use js_sys::Uint8Array;
-    use metasearch_core::EngineMethod;
+    use metasearch_core::{BotAuthPolicy, EngineMethod};
     use std::{collections::BTreeMap, time::Duration};
+    use uuid::Uuid;
+    use web_bot_auth::{
+        components::{CoveredComponent, DerivedComponent, HTTPField, HTTPFieldParametersSet},
+        keyring::Algorithm,
+        message_signatures::{MessageSigner, UnsignedMessage},
+    };
 
-    const SENSITIVE_HEADERS: &[&str] = &["authorization", "cookie", "proxy-authorization"];
+    const SENSITIVE_HEADERS: &[&str] = &[
+        "authorization",
+        "cookie",
+        "proxy-authorization",
+        "signature",
+        "signature-input",
+        "signature-agent",
+    ];
 
     fn strip_sensitive_headers(headers: &mut BTreeMap<String, String>) {
         headers.retain(|name, _| {
@@ -160,6 +218,112 @@ mod wasm {
             EngineMethod::Get => Method::Get,
             EngineMethod::Post => Method::Post,
         }
+    }
+
+    struct SignableRequest {
+        method: String,
+        authority: String,
+        target_uri: String,
+        signature_agent: String,
+        signature_input: String,
+        signature: String,
+    }
+
+    impl UnsignedMessage for SignableRequest {
+        fn fetch_components_to_cover(&self) -> IndexMap<CoveredComponent, String> {
+            IndexMap::from_iter([
+                (
+                    CoveredComponent::Derived(DerivedComponent::Method { req: false }),
+                    self.method.clone(),
+                ),
+                (
+                    CoveredComponent::Derived(DerivedComponent::Authority { req: false }),
+                    self.authority.clone(),
+                ),
+                (
+                    CoveredComponent::Derived(DerivedComponent::TargetUri { req: false }),
+                    self.target_uri.clone(),
+                ),
+                (
+                    CoveredComponent::HTTP(HTTPField {
+                        name: "signature-agent".into(),
+                        parameters: HTTPFieldParametersSet(Vec::new()),
+                    }),
+                    self.signature_agent.clone(),
+                ),
+            ])
+        }
+
+        fn register_header_contents(&mut self, signature_input: String, signature_header: String) {
+            self.signature_input = format!("sig1={signature_input}");
+            self.signature = format!("sig1={signature_header}");
+        }
+    }
+
+    fn apply_bot_auth(
+        client: &WorkerFetchClient,
+        engine: &'static EngineDescriptor,
+        request: &mut EngineRequest,
+    ) -> Result<(), EngineFailure> {
+        if engine.bot_auth_policy == BotAuthPolicy::Disabled {
+            return Ok(());
+        }
+        let Some(config) = client.bot_auth.as_ref() else {
+            if engine.bot_auth_policy == BotAuthPolicy::Required {
+                return Err(EngineFailure::new(
+                    engine.id,
+                    FailureKind::EngineDisabled,
+                    "Web Bot Auth is required by this engine but is not configured",
+                ));
+            }
+            return Ok(());
+        };
+        let authority = request
+            .url
+            .host_str()
+            .ok_or_else(|| {
+                EngineFailure::new(
+                    engine.id,
+                    FailureKind::Internal,
+                    "cannot sign a URL without an authority",
+                )
+            })?
+            .to_owned();
+        let signature_agent = format!("\"{}\"", config.directory_url);
+        let mut signable = SignableRequest {
+            method: match request.method {
+                EngineMethod::Get => "GET",
+                EngineMethod::Post => "POST",
+            }
+            .into(),
+            authority,
+            target_uri: request.url.to_string(),
+            signature_agent: signature_agent.clone(),
+            signature_input: String::new(),
+            signature: String::new(),
+        };
+        MessageSigner {
+            keyid: config.key_id.clone(),
+            nonce: Uuid::new_v4().to_string(),
+            tag: "web-bot-auth".into(),
+        }
+        .generate_signature_headers_content(
+            &mut signable,
+            Duration::from_secs(60),
+            Algorithm::Ed25519,
+            &config.private_key,
+        )
+        .map_err(|error| EngineFailure::new(engine.id, FailureKind::Internal, error.to_string()))?;
+        request
+            .headers
+            .insert("signature-agent".into(), signature_agent);
+        request
+            .headers
+            .insert("signature-input".into(), signable.signature_input);
+        request
+            .headers
+            .insert("signature".into(), signable.signature);
+        Ok(())
     }
 
     fn build_request(engine_id: &str, request: &EngineRequest) -> Result<Request, EngineFailure> {
@@ -306,6 +470,7 @@ mod wasm {
             let mut redirect_count = 0u8;
 
             loop {
+                apply_bot_auth(self, engine, &mut request)?;
                 let outgoing = build_request(engine.id, &request)?;
                 let mut response = fetch_with_deadline(engine.id, outgoing, deadline).await?;
                 let status = response.status_code();
@@ -353,8 +518,18 @@ mod wasm {
                 if let Some(failure) = classify_challenge(engine.id, status, &body) {
                     return Err(failure);
                 }
+                if !(200..300).contains(&status) {
+                    return Err(EngineFailure::new(
+                        engine.id,
+                        FailureKind::EngineAccessDenied,
+                        format!("provider returned HTTP {status}"),
+                    ));
+                }
                 let content_type = headers.get("content-type").map(String::as_str);
-                if !content_type_matches(content_type, request.accepted_content_types) {
+                let empty_acknowledgement = body.is_empty() && matches!(status, 202 | 204);
+                if !empty_acknowledgement
+                    && !content_type_matches(content_type, request.accepted_content_types)
+                {
                     return Err(EngineFailure::new(
                         engine.id,
                         FailureKind::EngineInvalidContentType,
@@ -362,13 +537,6 @@ mod wasm {
                             "unexpected content type: {}",
                             content_type.unwrap_or("missing")
                         ),
-                    ));
-                }
-                if !(200..300).contains(&status) {
-                    return Err(EngineFailure::new(
-                        engine.id,
-                        FailureKind::EngineAccessDenied,
-                        format!("provider returned HTTP {status}"),
                     ));
                 }
 

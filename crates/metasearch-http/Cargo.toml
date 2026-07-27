@@ -8,9 +8,13 @@ repository.workspace = true
 
 [dependencies]
 async-trait.workspace = true
+base64.workspace = true
 futures-util.workspace = true
+indexmap.workspace = true
 js-sys.workspace = true
 metasearch-core = { path = "../metasearch-core" }
 url.workspace = true
 wasm-bindgen.workspace = true
+web-bot-auth.workspace = true
 worker.workspace = true
+uuid.workspace = true

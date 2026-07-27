@@ -1,0 +1,31 @@
+[package]
+name = "searxflare-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+metasearch-core = { path = "../crates/metasearch-core" }
+metasearch-parsers = { path = "../crates/metasearch-parsers" }
+url = "2.5"
+
+[[bin]]
+name = "canonicalization"
+path = "fuzz_targets/canonicalization.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "html_parser_mutation"
+path = "fuzz_targets/html_parser_mutation.rs"
+test = false
+doc = false
+bench = false
+
+[workspace]
+members = ["."]

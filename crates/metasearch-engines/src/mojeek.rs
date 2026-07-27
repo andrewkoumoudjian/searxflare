@@ -237,6 +237,7 @@ impl SearchEngine for MojeekEngine {
         let results = parse_results(&response.body, &request_url)?;
         Ok(EngineOutput {
             results,
+            next_cursor: None,
             upstream_requests: 1,
             response_bytes: response.body.len(),
             parse_ms: 0,

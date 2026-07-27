@@ -9,6 +9,29 @@ npx wrangler secret put API_KEY_SHA256
 
 Paste only the lowercase hash, not the raw key. Configure optional Analytics Engine and KV bindings in `wrangler.toml` after creating the resources.
 
+Configure the cursor key and any provider credentials through Worker secrets:
+
+```bash
+npx wrangler secret put CURSOR_SIGNING_KEY
+npx wrangler secret put GITHUB_TOKEN
+npx wrangler secret put SEMANTIC_SCHOLAR_API_KEY
+npx wrangler secret put OPENALEX_API_KEY
+npx wrangler secret put WOLFRAM_APP_ID
+npx wrangler secret put EXA_API_KEY
+```
+
+Web Bot Auth additionally uses `WEB_BOT_AUTH_PRIVATE_KEY`,
+`WEB_BOT_AUTH_KEY_ID`, `WEB_BOT_AUTH_DIRECTORY_URL`,
+`WEB_BOT_AUTH_PUBLIC_JWKS`, and optionally `WEB_BOT_AUTH_AGENT_CARD`.
+Generate the Ed25519 private key offline and store only its base64url-encoded
+32-byte seed as a secret. Never put the private key in KV or repository config.
+
+The production configuration binds `ENGINE_STATE`, `CRAWL_STATE`,
+`CRAWL_DOCUMENTS`, and `SEARCH_ANALYTICS`. AI Search remains independently
+gated: create the `searxflare-crawl` R2-backed instance, confirm its index is
+healthy, add the `CRAWL_SEARCH` instance binding, and only then set
+`ENABLE_AI_SEARCH=true`.
+
 ## Cloudflare Workers Builds
 
 The repository is self-contained for Cloudflare's Git integration. `scripts/build_worker.sh` reads the pinned toolchain from `rust-toolchain.toml`, installs Rust through the official rustup installer when the build image does not provide it, adds `wasm32-unknown-unknown`, installs `worker-build` 0.8.5 when absent, validates `Cargo.lock`, and builds `metasearch-worker`.
@@ -46,13 +69,18 @@ Verify:
 
 1. `GET /healthz` returns `200` without authentication.
 2. `GET /readyz` returns `200` only when `API_KEY_SHA256` is configured.
-3. The authenticated engine catalogue returns the fifteen compiled engines.
+3. The authenticated engine catalogue returns the twenty compiled engines.
 4. Each single-engine debug route returns results or a classified provider failure.
 5. A default authenticated search returns a deterministic JSON response.
 6. A deliberate provider failure produces a partial result when another engine succeeds.
+7. `GET /` returns the search interface and `GET /ui/search?q=cloudflare` returns JSON without disclosing the API key.
+8. A successful query creates a document under `documents/` in `CRAWL_DOCUMENTS` and emits no crawl errors in Worker logs.
 
 A dry-run proves that the Worker builds and bundles. Only an authenticated deployment proves account configuration and production egress.
 
 Do not put Cloudflare Access in front of the cached search route. Apply WAF, API Shield OpenAPI validation and Workers Rate Limiting at the edge. Import `spec/openapi.yaml` into API Shield in log mode before enabling block mode.
 
-Rollback is a Worker version rollback or deployment of the last known-good commit. No database migration is required for this slice.
+The first deployment containing `ProviderCoordinatorObject` is an atomic Durable
+Object lifecycle migration. Deploy that migration separately; later code-only
+versions can use `scripts/deploy_gradual.sh`. See `docs/operations.md` for the
+rollout and dashboard contract.

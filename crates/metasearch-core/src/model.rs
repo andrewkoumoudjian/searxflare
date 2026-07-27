@@ -195,6 +195,8 @@ pub struct NormalizedResult {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct EngineOutput {
     pub results: Vec<ProviderResult>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub next_cursor: Option<String>,
     #[serde(default)]
     pub upstream_requests: u8,
     #[serde(default)]
@@ -203,6 +205,35 @@ pub struct EngineOutput {
     pub parse_ms: u64,
     #[serde(default)]
     pub redirect_count: u8,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ProviderCoordinatorCommand {
+    AcquireRefreshLease {
+        now_ms: u64,
+        lease_ms: u32,
+    },
+    RecordSuccess {
+        now_ms: u64,
+    },
+    RecordFailure {
+        now_ms: u64,
+        failure_kind: String,
+        cooldown_ms: u32,
+    },
+    Snapshot {
+        now_ms: u64,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct ProviderCoordinatorSnapshot {
+    pub refresh_lease_acquired: bool,
+    pub lease_expires_at_ms: Option<u64>,
+    pub cooldown_expires_at_ms: Option<u64>,
+    pub consecutive_failures: u32,
+    pub last_failure_kind: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -220,6 +251,12 @@ pub struct EngineExecutionReport {
     pub duration_ms: u64,
     pub cache_status: CacheStatus,
     pub result_count: usize,
+    #[serde(default)]
+    pub response_bytes: usize,
+    #[serde(default)]
+    pub parse_ms: u64,
+    #[serde(default)]
+    pub redirect_count: u8,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub failure_kind: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

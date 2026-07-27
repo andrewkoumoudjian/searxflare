@@ -326,6 +326,10 @@ components:
         partial: { type: boolean }
         cached: { type: boolean }
         result_count: { type: integer, minimum: 0, maximum: 20 }
+        next_cursor:
+          type: string
+          maxLength: 4096
+          description: Signed, query-bound continuation cursor valid for fifteen minutes.
         results:
           type: array
           items: { $ref: '#/components/schemas/Result' }
@@ -368,6 +372,9 @@ components:
         duration_ms: { type: integer, minimum: 0 }
         cache_status: { type: string, enum: [hit, miss, bypass, negative_hit] }
         result_count: { type: integer, minimum: 0 }
+        response_bytes: { type: integer, minimum: 0 }
+        parse_ms: { type: integer, minimum: 0 }
+        redirect_count: { type: integer, minimum: 0 }
         failure_kind: { type: string, nullable: true }
         parser_version: { type: string, nullable: true }
     EngineDescriptor:

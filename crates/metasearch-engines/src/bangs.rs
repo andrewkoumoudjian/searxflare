@@ -14,7 +14,7 @@ struct BangSpec {
     target: BangTarget,
 }
 
-const BOOKS_PROFILE: &[&str] = &["crossref"];
+const BOOKS_PROFILE: &[&str] = &["crossref", "openalex"];
 
 const BANG_REGISTRY: &[BangSpec] = &[
     BangSpec {
@@ -52,6 +52,14 @@ const BANG_REGISTRY: &[BangSpec] = &[
     BangSpec {
         alias: "brave",
         target: BangTarget::Engine("brave-web"),
+    },
+    BangSpec {
+        alias: "news",
+        target: BangTarget::Engine("brave-news"),
+    },
+    BangSpec {
+        alias: "brave-news",
+        target: BangTarget::Engine("brave-news"),
     },
     BangSpec {
         alias: "qwant",
@@ -132,6 +140,30 @@ const BANG_REGISTRY: &[BangSpec] = &[
     BangSpec {
         alias: "gh",
         target: BangTarget::Engine("github"),
+    },
+    BangSpec {
+        alias: "wolfram",
+        target: BangTarget::Engine("wolframalpha"),
+    },
+    BangSpec {
+        alias: "wa",
+        target: BangTarget::Engine("wolframalpha"),
+    },
+    BangSpec {
+        alias: "openalex",
+        target: BangTarget::Engine("openalex"),
+    },
+    BangSpec {
+        alias: "exa",
+        target: BangTarget::Engine("exa-mcp"),
+    },
+    BangSpec {
+        alias: "startpage",
+        target: BangTarget::Engine("startpage-web"),
+    },
+    BangSpec {
+        alias: "sp",
+        target: BangTarget::Engine("startpage-web"),
     },
 ];
 
@@ -252,7 +284,7 @@ mod tests {
         assert_eq!(engines.engines, vec!["arxiv", "wikipedia"]);
 
         let books = resolve_bangs("!books food safety").unwrap();
-        assert_eq!(books.engines, vec!["crossref"]);
+        assert_eq!(books.engines, vec!["crossref", "openalex"]);
 
         let providers = resolve_bangs("!mj !yh !ya !bd !google !grok independent search").unwrap();
         assert_eq!(providers.provider_query, "independent search");

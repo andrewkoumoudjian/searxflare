@@ -1,0 +1,26 @@
+id: exa-mcp
+display_name: Exa MCP
+endpoint: https://mcp.exa.ai/mcp
+method: POST
+categories: [general]
+source_kind: json
+allowed_hosts: [mcp.exa.ai]
+capabilities:
+  paging: false
+  locale: false
+  country: false
+  safe_search: false
+  time_range: false
+limits:
+  timeout_ms: 2500
+  max_body_bytes: 2097152
+  max_steps: 3
+  max_redirects: 2
+versions:
+  parser: exa-streamable-http-mcp-v1
+cache:
+  response_ttl_seconds: 300
+  negative_ttl_seconds: 60
+state: stateless
+default_enabled: false
+notes: Bounded Streamable HTTP MCP adapter that initializes a session and invokes web_search_exa using EXA_API_KEY without exposing arbitrary tools, methods, hosts, or headers.

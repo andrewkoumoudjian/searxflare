@@ -1,7 +1,11 @@
 #[cfg(target_arch = "wasm32")]
 use metasearch_core::FailureKind;
-use metasearch_core::{EngineFailure, EngineState};
-use serde::{Deserialize, Serialize};
+use metasearch_core::{
+    EngineFailure, EngineSecrets, EngineState, ProviderCoordinator, ProviderCoordinatorCommand,
+    ProviderCoordinatorSnapshot,
+};
+#[cfg(target_arch = "wasm32")]
+use worker::{Headers, Method, ObjectNamespace, Request, RequestInit};
 
 #[derive(Debug, Default, Clone, Copy)]
 pub struct NoopEngineState;
@@ -24,6 +28,35 @@ impl EngineState for NoopEngineState {
 
     async fn delete(&self, _engine_id: &str, _key: &str) -> Result<(), EngineFailure> {
         Ok(())
+    }
+}
+
+#[derive(Debug, Default, Clone, Copy)]
+pub struct NoopEngineSecrets;
+
+impl EngineSecrets for NoopEngineSecrets {
+    fn get(&self, _engine_id: &str, _name: &str) -> Option<String> {
+        None
+    }
+}
+
+#[derive(Debug, Default, Clone, Copy)]
+pub struct NoopProviderCoordinator;
+
+#[async_trait::async_trait(?Send)]
+impl ProviderCoordinator for NoopProviderCoordinator {
+    async fn execute(
+        &self,
+        _engine_id: &str,
+        command: ProviderCoordinatorCommand,
+    ) -> Result<ProviderCoordinatorSnapshot, EngineFailure> {
+        Ok(ProviderCoordinatorSnapshot {
+            refresh_lease_acquired: matches!(
+                command,
+                ProviderCoordinatorCommand::AcquireRefreshLease { .. }
+            ),
+            ..ProviderCoordinatorSnapshot::default()
+        })
     }
 }
 
@@ -93,38 +126,66 @@ impl EngineState for KvEngineState {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum CoordinatorCommand {
-    AcquireRefreshLease {
-        now_ms: u64,
-        lease_ms: u32,
-    },
-    RecordSuccess {
-        now_ms: u64,
-    },
-    RecordFailure {
-        now_ms: u64,
-        failure_kind: String,
-        cooldown_ms: u32,
-    },
-    Snapshot,
+#[cfg(target_arch = "wasm32")]
+pub struct DurableObjectProviderCoordinator {
+    namespace: ObjectNamespace,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
-pub struct CoordinatorSnapshot {
-    pub lease_expires_at_ms: Option<u64>,
-    pub cooldown_expires_at_ms: Option<u64>,
-    pub consecutive_failures: u32,
-    pub last_failure_kind: Option<String>,
+#[cfg(target_arch = "wasm32")]
+impl DurableObjectProviderCoordinator {
+    pub const fn new(namespace: ObjectNamespace) -> Self {
+        Self { namespace }
+    }
 }
 
+#[cfg(target_arch = "wasm32")]
 #[async_trait::async_trait(?Send)]
-pub trait ProviderCoordinator {
+impl ProviderCoordinator for DurableObjectProviderCoordinator {
     async fn execute(
         &self,
         engine_id: &str,
-        command: CoordinatorCommand,
-    ) -> Result<CoordinatorSnapshot, EngineFailure>;
+        command: ProviderCoordinatorCommand,
+    ) -> Result<ProviderCoordinatorSnapshot, EngineFailure> {
+        let stub = self.namespace.get_by_name(engine_id).map_err(|error| {
+            EngineFailure::new(engine_id, FailureKind::Internal, error.to_string())
+        })?;
+        let body = serde_json::to_string(&command).map_err(|error| {
+            EngineFailure::new(engine_id, FailureKind::Internal, error.to_string())
+        })?;
+        let headers = Headers::new();
+        headers
+            .set("content-type", "application/json")
+            .map_err(|error| {
+                EngineFailure::new(engine_id, FailureKind::Internal, error.to_string())
+            })?;
+        let mut init = RequestInit::new();
+        init.with_method(Method::Post)
+            .with_headers(headers)
+            .with_body(Some(body.into()));
+        let request = Request::new_with_init("https://provider-coordinator/command", &init)
+            .map_err(|error| {
+                EngineFailure::new(engine_id, FailureKind::Internal, error.to_string())
+            })?;
+        let mut response = stub.fetch_with_request(request).await.map_err(|error| {
+            EngineFailure::new(engine_id, FailureKind::Internal, error.to_string())
+        })?;
+        if response.status_code() != 200 {
+            return Err(EngineFailure::new(
+                engine_id,
+                FailureKind::Internal,
+                format!(
+                    "provider coordinator returned HTTP {}",
+                    response.status_code()
+                ),
+            ));
+        }
+        response
+            .json::<ProviderCoordinatorSnapshot>()
+            .await
+            .map_err(|error| {
+                EngineFailure::new(engine_id, FailureKind::Internal, error.to_string())
+            })
+    }
 }
 
 #[cfg(test)]
@@ -133,13 +194,13 @@ mod tests {
 
     #[test]
     fn coordinator_contract_round_trips() {
-        let command = CoordinatorCommand::RecordFailure {
+        let command = ProviderCoordinatorCommand::RecordFailure {
             now_ms: 100,
             failure_kind: "ENGINE_CHALLENGED".into(),
             cooldown_ms: 30_000,
         };
         let encoded = serde_json::to_string(&command).unwrap();
-        let decoded: CoordinatorCommand = serde_json::from_str(&encoded).unwrap();
+        let decoded: ProviderCoordinatorCommand = serde_json::from_str(&encoded).unwrap();
         assert_eq!(decoded, command);
     }
 }

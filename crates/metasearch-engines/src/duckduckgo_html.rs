@@ -1,11 +1,13 @@
 use metasearch_core::{
     BotAuthPolicy, CachePolicy, EngineCapabilities, EngineContext, EngineDescriptor, EngineFailure,
     EngineMaturity, EngineMethod, EngineOutput, EngineRequest, FailureKind, NormalizedQuery,
-    ProviderResult, SafeSearch, SearchEngine, SourceKind, StatePolicy, TimeRange,
-    DEFAULT_MAX_BODY_BYTES, DEFAULT_MAX_REDIRECTS, DEFAULT_MAX_STEPS, HTML_ENGINE_TIMEOUT_MS,
+    ProviderCoordinatorCommand, ProviderResult, SafeSearch, SearchEngine, SourceKind, StatePolicy,
+    TimeRange, DEFAULT_MAX_BODY_BYTES, DEFAULT_MAX_REDIRECTS, DEFAULT_MAX_STEPS,
+    HTML_ENGINE_TIMEOUT_MS,
 };
 use metasearch_parsers::{parse_selector_results, SelectorResultSpec};
 use serde_json::Map;
+use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use url::Url;
 
@@ -19,7 +21,7 @@ pub static DESCRIPTOR: EngineDescriptor = EngineDescriptor {
     maturity: EngineMaturity::Experimental,
     allowed_hosts: &["html.duckduckgo.com", "duckduckgo.com"],
     capabilities: EngineCapabilities {
-        paging: false,
+        paging: true,
         locale: true,
         country: false,
         safe_search: true,
@@ -33,7 +35,7 @@ pub static DESCRIPTOR: EngineDescriptor = EngineDescriptor {
     parser_version: "duckduckgo-html-v1",
     default_enabled: true,
     allow_http: false,
-    state_policy: StatePolicy::Stateless,
+    state_policy: StatePolicy::DurableCoordinator,
     cache_policy: CachePolicy {
         response_ttl_seconds: 180,
         negative_ttl_seconds: 30,
@@ -93,6 +95,40 @@ fn unwrap_redirect(url: &str) -> String {
         .unwrap_or_else(|| url.to_owned())
 }
 
+fn query_state_key(query: &NormalizedQuery) -> String {
+    let digest = Sha256::digest(
+        format!(
+            "{}\0{:?}\0{:?}\0{:?}",
+            query.text, query.locale, query.safe_search, query.time_range
+        )
+        .as_bytes(),
+    );
+    format!("continuation:{digest:x}")
+}
+
+fn extract_vqd(body: &[u8]) -> Option<String> {
+    let text = String::from_utf8_lossy(body);
+    for marker in ["name=\"vqd\" value=\"", "vqd='", "vqd=\""] {
+        let Some(start) = text.find(marker) else {
+            continue;
+        };
+        let value = &text[start + marker.len()..];
+        let delimiter = if marker.ends_with('\'') { '\'' } else { '"' };
+        if let Some(end) = value.find(delimiter) {
+            let value = value[..end].trim();
+            if !value.is_empty()
+                && value.len() <= 256
+                && value
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
+            {
+                return Some(value.into());
+            }
+        }
+    }
+    None
+}
+
 #[async_trait::async_trait(?Send)]
 impl SearchEngine for DuckDuckGoHtmlEngine {
     fn descriptor(&self) -> &'static EngineDescriptor {
@@ -104,12 +140,66 @@ impl SearchEngine for DuckDuckGoHtmlEngine {
         query: &NormalizedQuery,
         context: &EngineContext<'_>,
     ) -> Result<EngineOutput, EngineFailure> {
-        if query.page_number() != 1 {
+        if query.page_number() > 20 {
             return Err(EngineFailure::new(
                 DESCRIPTOR.id,
                 FailureKind::UnsupportedCapability,
-                "DuckDuckGo HTML continuation requires query-bound VQD state and is out of scope for this cycle",
+                "DuckDuckGo HTML paging is capped at twenty pages",
             ));
+        }
+        let now_ms = context.now_ms;
+        let cooldown = context
+            .coordinator
+            .execute(
+                DESCRIPTOR.id,
+                ProviderCoordinatorCommand::Snapshot { now_ms },
+            )
+            .await?;
+        if cooldown
+            .cooldown_expires_at_ms
+            .is_some_and(|expiry| expiry > now_ms)
+        {
+            return Err(EngineFailure::new(
+                DESCRIPTOR.id,
+                FailureKind::EngineRateLimited,
+                "DuckDuckGo is in a shared provider cooldown",
+            ));
+        }
+        let state_key = query_state_key(query);
+        let coordination_key = format!("{}:{state_key}", DESCRIPTOR.id);
+        let mut continuation = query.cursor.clone();
+        if continuation.is_none() && query.page_number() > 1 {
+            continuation = context
+                .state
+                .get(DESCRIPTOR.id, &state_key)
+                .await?
+                .and_then(|bytes| String::from_utf8(bytes).ok());
+        }
+        if query.page_number() > 1 && continuation.is_none() {
+            return Err(EngineFailure::new(
+                DESCRIPTOR.id,
+                FailureKind::InvalidRequest,
+                "DuckDuckGo continuation cursor is missing or expired",
+            ));
+        }
+        if query.page_number() == 1 {
+            let lease = context
+                .coordinator
+                .execute(
+                    &coordination_key,
+                    ProviderCoordinatorCommand::AcquireRefreshLease {
+                        now_ms,
+                        lease_ms: 5_000,
+                    },
+                )
+                .await?;
+            if !lease.refresh_lease_acquired {
+                return Err(EngineFailure::new(
+                    DESCRIPTOR.id,
+                    FailureKind::EngineRateLimited,
+                    "DuckDuckGo continuation initialization is already in progress",
+                ));
+            }
         }
         let url = Url::parse("https://html.duckduckgo.com/html/").map_err(|error| {
             EngineFailure::new(DESCRIPTOR.id, FailureKind::Internal, error.to_string())
@@ -122,6 +212,19 @@ impl SearchEngine for DuckDuckGoHtmlEngine {
             ("kl", locale.as_str()),
             ("kp", safe_search),
         ];
+        let offset = query
+            .page_number()
+            .saturating_sub(1)
+            .saturating_mul(u32::from(query.limit));
+        let offset_string = offset.to_string();
+        let result_start = offset.saturating_add(1).to_string();
+        if query.page_number() > 1 {
+            form.push(("s", offset_string.as_str()));
+            form.push(("dc", result_start.as_str()));
+        }
+        if let Some(vqd) = continuation.as_deref() {
+            form.push(("vqd", vqd));
+        }
         if let Some(code) = time_range_code(query.time_range) {
             form.push(("df", code));
         }
@@ -155,10 +258,32 @@ impl SearchEngine for DuckDuckGoHtmlEngine {
             body: Some(body),
             accepted_content_types: &["text/html", "application/xhtml+xml"],
         };
-        let response = context
+        let response = match context
             .http
             .send(&DESCRIPTOR, request, context.deadline)
-            .await?;
+            .await
+        {
+            Ok(response) => response,
+            Err(failure) => {
+                if matches!(
+                    failure.kind,
+                    FailureKind::EngineRateLimited | FailureKind::EngineChallenged
+                ) {
+                    let _ = context
+                        .coordinator
+                        .execute(
+                            DESCRIPTOR.id,
+                            ProviderCoordinatorCommand::RecordFailure {
+                                now_ms,
+                                failure_kind: failure.kind.as_code().into(),
+                                cooldown_ms: 60_000,
+                            },
+                        )
+                        .await;
+                }
+                return Err(failure);
+            }
+        };
         let parsed =
             parse_selector_results(&response.body, &url, &SELECTORS, 20).map_err(|error| {
                 EngineFailure::new(
@@ -183,8 +308,30 @@ impl SearchEngine for DuckDuckGoHtmlEngine {
                 engine_weight: DESCRIPTOR.weight,
             })
             .collect();
+        let next_cursor = extract_vqd(&response.body).or(continuation);
+        if let Some(cursor) = next_cursor.as_deref() {
+            context
+                .state
+                .put(DESCRIPTOR.id, &state_key, cursor.as_bytes(), Some(900))
+                .await?;
+        }
+        let _ = context
+            .coordinator
+            .execute(
+                &coordination_key,
+                ProviderCoordinatorCommand::RecordSuccess { now_ms },
+            )
+            .await;
+        let _ = context
+            .coordinator
+            .execute(
+                DESCRIPTOR.id,
+                ProviderCoordinatorCommand::RecordSuccess { now_ms },
+            )
+            .await;
         Ok(EngineOutput {
             results,
+            next_cursor,
             upstream_requests: 1,
             response_bytes: response.body.len(),
             parse_ms: 0,

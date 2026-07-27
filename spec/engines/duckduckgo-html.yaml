@@ -6,7 +6,7 @@ categories: [general]
 source_kind: html
 allowed_hosts: [html.duckduckgo.com, duckduckgo.com]
 capabilities:
-  paging: false
+  paging: true
   locale: true
   country: false
   safe_search: true
@@ -21,6 +21,6 @@ versions:
 cache:
   response_ttl_seconds: 180
   negative_ttl_seconds: 30
-state: stateless
+state: durable_coordinator
 default_enabled: true
-notes: First-page no-JavaScript HTML form only. Uses q, b, kl, kp and optional df; continuation requiring VQD is intentionally unsupported. Redirect-wrapper decoding is internal and limited to DuckDuckGo /l URLs.
+notes: No-JavaScript HTML form with signed public cursors carrying query-bound VQD continuation. Initialization is single-flight per query, provider cooldown is shared, and continuation state expires from KV. Redirect-wrapper decoding is internal and limited to DuckDuckGo /l URLs.

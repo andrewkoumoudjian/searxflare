@@ -1,8 +1,10 @@
 use crate::{NormalizedResult, RankingStrategy};
+use entropy_map::{Set as EntropySet, DEFAULT_GAMMA};
 use std::cmp::Ordering;
 use std::collections::BTreeSet;
 use std::fmt::{Display, Formatter};
 use unicode_normalization::UnicodeNormalization;
+use wildcard::Wildcard;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RankingError {
@@ -79,14 +81,46 @@ fn tokens(value: &str) -> BTreeSet<String> {
         .collect()
 }
 
+fn wildcard_pattern(token: &str) -> Vec<char> {
+    let mut pattern = Vec::with_capacity(token.chars().count() + 1);
+    for character in token.chars() {
+        if matches!(character, '*' | '?' | '\\') {
+            pattern.push('\\');
+        }
+        pattern.push(character);
+    }
+    pattern.push('*');
+    pattern
+}
+
 fn token_coverage(query_tokens: &BTreeSet<String>, haystack: &str) -> f64 {
     if query_tokens.is_empty() {
         return 0.0;
     }
     let haystack_tokens = tokens(haystack);
+    let haystack_index: Option<EntropySet<String>> =
+        EntropySet::from_iter_with_params(haystack_tokens.iter().cloned(), DEFAULT_GAMMA).ok();
     let covered = query_tokens
         .iter()
-        .filter(|token| haystack_tokens.contains(*token))
+        .filter(|token| {
+            if haystack_index
+                .as_ref()
+                .is_some_and(|index| index.contains(token.as_str()))
+            {
+                return true;
+            }
+            if token.chars().count() < 4 {
+                return false;
+            }
+            let pattern = wildcard_pattern(token);
+            let Ok(wildcard) = Wildcard::new(&pattern) else {
+                return false;
+            };
+            haystack_tokens.iter().any(|candidate| {
+                let candidate = candidate.chars().collect::<Vec<_>>();
+                wildcard.is_match(&candidate)
+            })
+        })
         .count();
     covered as f64 / query_tokens.len() as f64
 }
@@ -248,6 +282,22 @@ mod tests {
         )
         .unwrap();
         assert_eq!(ranked[0].canonical_url, "https://consensus.example/");
+    }
+
+    #[test]
+    fn query_aware_matches_normalized_token_prefixes() {
+        let mut relevant = result("https://example.com/relevant", &[("a", 3, 1.0)]);
+        relevant.title = "Distributed systems for the edge".into();
+        let mut unrelated = result("https://example.com/unrelated", &[("a", 1, 1.0)]);
+        unrelated.title = "A cooking reference".into();
+
+        let ranked = rank_results(
+            vec![unrelated, relevant],
+            RankingStrategy::QueryAwareV1,
+            "distribution edge",
+        )
+        .unwrap();
+        assert_eq!(ranked[0].canonical_url, "https://example.com/relevant");
     }
 
     #[test]

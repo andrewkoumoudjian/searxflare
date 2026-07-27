@@ -67,6 +67,8 @@ jobs:
         run: exit 1
       - name: Rust tests
         run: cargo test --locked --workspace
+      - name: Memory profile guard
+        run: cargo run --locked -p metasearch-core --example memory_profile --release
       - name: Wasm build
         id: wasm-build
         shell: bash

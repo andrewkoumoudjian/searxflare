@@ -42,7 +42,15 @@ pub static DESCRIPTOR: EngineDescriptor = EngineDescriptor {
 
 const FIELDS: &str = "title,abstract,url,authors,year,publicationDate,venue,externalIds,citationCount,influentialCitationCount,isOpenAccess,openAccessPdf,fieldsOfStudy,publicationTypes,journal";
 
+#[cfg(test)]
 fn build_request(query: &NormalizedQuery) -> Result<EngineRequest, EngineFailure> {
+    build_request_with_token(query, None)
+}
+
+fn build_request_with_token(
+    query: &NormalizedQuery,
+    token: Option<&str>,
+) -> Result<EngineRequest, EngineFailure> {
     if query.time_range.is_some() {
         return Err(EngineFailure::new(
             DESCRIPTOR.id,
@@ -71,16 +79,20 @@ fn build_request(query: &NormalizedQuery) -> Result<EngineRequest, EngineFailure
         .append_pair("limit", &limit.to_string())
         .append_pair("fields", FIELDS);
 
+    let mut headers = BTreeMap::from([
+        ("accept".into(), "application/json".into()),
+        (
+            "user-agent".into(),
+            "Searxflare/0.1 (+https://github.com/andrewkoumoudjian/searxflare)".into(),
+        ),
+    ]);
+    if let Some(token) = token {
+        headers.insert("x-api-key".into(), token.into());
+    }
     Ok(EngineRequest {
         method: EngineMethod::Get,
         url,
-        headers: BTreeMap::from([
-            ("accept".into(), "application/json".into()),
-            (
-                "user-agent".into(),
-                "Searxflare/0.1 (+https://github.com/andrewkoumoudjian/searxflare)".into(),
-            ),
-        ]),
+        headers,
         cookies: BTreeMap::new(),
         body: None,
         accepted_content_types: &["application/json", "text/json"],
@@ -233,13 +245,19 @@ impl SearchEngine for SemanticScholarEngine {
         query: &NormalizedQuery,
         context: &EngineContext<'_>,
     ) -> Result<EngineOutput, EngineFailure> {
+        let token = context.secrets.get(DESCRIPTOR.id, "api_key");
         let response = context
             .http
-            .send(&DESCRIPTOR, build_request(query)?, context.deadline)
+            .send(
+                &DESCRIPTOR,
+                build_request_with_token(query, token.as_deref())?,
+                context.deadline,
+            )
             .await?;
         let results = parse_results(&response.body)?;
         Ok(EngineOutput {
             results,
+            next_cursor: None,
             upstream_requests: 1,
             response_bytes: response.body.len(),
             parse_ms: 0,

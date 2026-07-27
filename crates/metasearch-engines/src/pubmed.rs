@@ -315,6 +315,7 @@ impl SearchEngine for PubMedEngine {
         if ids.is_empty() {
             return Ok(EngineOutput {
                 results: Vec::new(),
+                next_cursor: None,
                 upstream_requests: 1,
                 response_bytes: search_response.body.len(),
                 parse_ms: 0,
@@ -329,6 +330,7 @@ impl SearchEngine for PubMedEngine {
         let results = parse_summary_results(&summary_response.body)?;
         Ok(EngineOutput {
             results,
+            next_cursor: None,
             upstream_requests: 2,
             response_bytes: search_response
                 .body

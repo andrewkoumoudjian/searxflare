@@ -3,7 +3,7 @@ use serde::Serialize;
 use sha2::{Digest, Sha256};
 
 pub const API_VERSION: &str = "v1";
-pub const ENGINE_REGISTRY_VERSION: &str = "2026-07-26.3";
+pub const ENGINE_REGISTRY_VERSION: &str = "2026-07-27.1";
 pub const RANKING_VERSION: &str = "2026-07-26.1";
 
 #[derive(Debug, Clone, Serialize)]

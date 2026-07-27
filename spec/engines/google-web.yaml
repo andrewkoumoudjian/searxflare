@@ -21,6 +21,6 @@ versions:
 cache:
   response_ttl_seconds: 120
   negative_ttl_seconds: 30
-state: stateless
+state: durable_coordinator
 default_enabled: false
-notes: Uses the public HTML frontend with fixed hosts, bounded ten-result pages, locale, safe-search and time filters, tracking-link unwrapping, streaming lol-html parsing, and explicit changed-layout detection. Default-disabled because challenge behavior from Cloudflare egress is not yet validated.
+notes: Uses the public HTML frontend with fixed hosts, bounded ten-result pages, locale, safe-search and time filters, optional Web Bot Auth signing, shared challenge cooldown, tracking-link unwrapping, streaming lol-html parsing, and explicit changed-layout detection. Default-disabled because challenge behavior from Cloudflare egress is not yet validated.

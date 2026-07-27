@@ -1,0 +1,22 @@
+version: 1
+providers:
+  arxiv: {contract: public_api, auth: none, production_default: true}
+  wikipedia: {contract: public_api, auth: none, production_default: true}
+  duckduckgo-html: {contract: public_frontend, auth: none, production_default: true}
+  brave-web: {contract: public_frontend, auth: optional_web_bot_auth, production_default: true}
+  brave-news: {contract: public_frontend, auth: optional_web_bot_auth, production_default: false}
+  qwant-web: {contract: public_frontend, auth: none, production_default: false}
+  pubmed: {contract: public_api, auth: none, production_default: false}
+  semantic-scholar: {contract: public_api, auth: optional_api_key, production_default: false}
+  crossref: {contract: public_api, auth: optional_operator_identity, production_default: false}
+  github: {contract: public_api, auth: optional_api_key, production_default: false}
+  mojeek-web: {contract: public_frontend, auth: none, production_default: false}
+  yahoo-web: {contract: public_frontend, auth: none, production_default: false}
+  yandex-web: {contract: public_frontend, auth: none, production_default: false}
+  baidu-web: {contract: public_frontend, auth: none, production_default: false}
+  google-web: {contract: public_frontend, auth: optional_web_bot_auth, production_default: false}
+  grokipedia: {contract: public_api, auth: none, production_default: false}
+  wolframalpha: {contract: supported_api, auth: required_api_key, production_default: false}
+  openalex: {contract: supported_api, auth: required_api_key, production_default: false}
+  exa-mcp: {contract: supported_mcp, auth: required_api_key, production_default: false}
+  startpage-web: {contract: public_frontend, auth: optional_web_bot_auth, production_default: false}

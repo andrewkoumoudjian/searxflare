@@ -28,6 +28,24 @@ Cloudflare lol-html
 - Licence: BSD-3-Clause
 - Use: dependency and selector-driven streaming parser API.
 
+Cloudflare web-bot-auth
+- Repository: https://github.com/cloudflare/web-bot-auth
+- Reviewed release: 0.7.0
+- Licence: Apache-2.0
+- Use: optional Ed25519 HTTP Message Signatures for transparent bot identity.
+
+OpenAlex
+- Documentation: https://developers.openalex.org/api-reference/authentication
+- Use: official Works search contract and API-key parameter.
+
+WolframAlpha
+- Documentation: https://products.wolframalpha.com/api/documentation
+- Use: official Full Results API v2 JSON and plaintext pod contract.
+
+Exa MCP
+- Documentation: https://exa.ai/docs/reference/exa-mcp
+- Use: official Streamable HTTP endpoint, x-api-key header and web_search_exa tool contract.
+
 ArcArcGo
 - Repository: https://github.com/0xarchit/ArcArcGo
 - Reviewed branch: main; worker.js blob fe41a1caa28b25b282ac21f641aa1bf55f5e4f45

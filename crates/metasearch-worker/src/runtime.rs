@@ -5,15 +5,18 @@ use metasearch_api::{
 };
 use metasearch_core::{
     build_cache_key, deduplicate, normalize_provider_result, rank_results, CacheKeyInput,
-    CacheStatus, Deadline, EngineContext, EngineExecutionReport, EngineFailure, EngineOutput,
-    FailureKind, NormalizedQuery, RankingStrategy, SafeSearch, SearchEngine, TimeRange,
+    CacheStatus, CursorPayload, CursorSigner, Deadline, EngineContext, EngineExecutionReport,
+    EngineFailure, EngineOutput, EngineSecrets, EngineState, FailureKind, NormalizedQuery,
+    ProviderCoordinator, RankingStrategy, SafeSearch, SearchEngine, TimeRange,
     ENGINE_REGISTRY_VERSION,
 };
 use metasearch_engines::{
     default_engine_ids, find_engine, registry, resolve_bangs, BangResolution, RegisteredEngine,
 };
-use metasearch_http::WorkerFetchClient;
-use metasearch_state::NoopEngineState;
+use metasearch_http::{BotAuthConfig, WorkerFetchClient};
+use metasearch_state::{
+    DurableObjectProviderCoordinator, KvEngineState, NoopEngineState, NoopProviderCoordinator,
+};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, rc::Rc};
@@ -33,14 +36,43 @@ struct EngineRun {
     report: EngineExecutionReport,
 }
 
+struct WorkerEngineSecrets<'a> {
+    env: &'a Env,
+}
+
+impl EngineSecrets for WorkerEngineSecrets<'_> {
+    fn get(&self, engine_id: &str, name: &str) -> Option<String> {
+        let binding = match (engine_id, name) {
+            ("github", "api_key") => "GITHUB_TOKEN",
+            ("semantic-scholar", "api_key") => "SEMANTIC_SCHOLAR_API_KEY",
+            ("openalex", "api_key") => "OPENALEX_API_KEY",
+            ("wolframalpha", "app_id") => "WOLFRAM_APP_ID",
+            ("exa-mcp", "api_key") => "EXA_API_KEY",
+            ("crossref", "mailto") => "CROSSREF_MAILTO",
+            _ => return None,
+        };
+        self.env
+            .secret(binding)
+            .map(|secret| secret.to_string())
+            .or_else(|_| self.env.var(binding).map(|value| value.to_string()))
+            .ok()
+    }
+}
+
 pub async fn handle(req: Request, env: Env, ctx: Context) -> worker::Result<Response> {
     Router::with_data(AppData {
         execution: Rc::new(ctx),
     })
     .get_async("/healthz", healthz)
     .get_async("/readyz", readyz)
+    .get_async(
+        "/.well-known/http-message-signatures-directory",
+        signature_directory,
+    )
+    .get_async("/signature-agent-card", signature_agent_card)
     .get_async("/v1/search", search_get)
     .post_async("/v1/search", search_post)
+    .get_async("/ui/search", ui_search)
     .get_async("/v1/engines", engines)
     .get_async("/v1/engines/:engine_id", engine)
     .get_async("/v1/engines/:engine_id/search", engine_search)
@@ -74,6 +106,19 @@ fn json_response<T: Serialize>(
             request_id,
             "application/json; charset=utf-8",
         )?)
+        .fixed(bytes))
+}
+
+fn json_response_with_type<T: Serialize>(
+    value: &T,
+    status: u16,
+    request_id: &str,
+    content_type: &str,
+) -> worker::Result<Response> {
+    let bytes = serde_json::to_vec(value)?;
+    Ok(ResponseBuilder::new()
+        .with_status(status)
+        .with_headers(response_headers(request_id, content_type)?)
         .fixed(bytes))
 }
 
@@ -158,6 +203,85 @@ async fn readyz(_req: Request, ctx: RouteContext<AppData>) -> worker::Result<Res
             &id,
         )
     }
+}
+
+fn env_text(env: &Env, name: &str) -> Option<String> {
+    env.secret(name)
+        .map(|value| value.to_string())
+        .or_else(|_| env.var(name).map(|value| value.to_string()))
+        .ok()
+}
+
+fn bot_auth_config(env: &Env) -> Option<BotAuthConfig> {
+    let private_key = env_text(env, "WEB_BOT_AUTH_PRIVATE_KEY")?;
+    let key_id = env_text(env, "WEB_BOT_AUTH_KEY_ID")?;
+    let directory_url = env_text(env, "WEB_BOT_AUTH_DIRECTORY_URL")?;
+    BotAuthConfig::from_base64(key_id, directory_url, &private_key).ok()
+}
+
+async fn signature_directory(
+    _req: Request,
+    ctx: RouteContext<AppData>,
+) -> worker::Result<Response> {
+    let id = request_id();
+    let Some(document) = env_text(&ctx.env, "WEB_BOT_AUTH_PUBLIC_JWKS") else {
+        return problem_response(
+            ApiError::new(
+                ErrorCode::InvalidRequest,
+                "Web Bot Auth public key directory is not configured",
+            ),
+            "/.well-known/http-message-signatures-directory",
+            &id,
+        );
+    };
+    let value: serde_json::Value = match serde_json::from_str(&document) {
+        Ok(value) => value,
+        Err(error) => {
+            return problem_response(
+                ApiError::new(
+                    ErrorCode::InternalError,
+                    format!("Web Bot Auth public key directory is invalid: {error}"),
+                ),
+                "/.well-known/http-message-signatures-directory",
+                &id,
+            )
+        }
+    };
+    json_response_with_type(
+        &value,
+        200,
+        &id,
+        "application/http-message-signatures-directory+json",
+    )
+}
+
+async fn signature_agent_card(
+    _req: Request,
+    ctx: RouteContext<AppData>,
+) -> worker::Result<Response> {
+    let id = request_id();
+    let value = if let Some(document) = env_text(&ctx.env, "WEB_BOT_AUTH_AGENT_CARD") {
+        match serde_json::from_str::<serde_json::Value>(&document) {
+            Ok(value) => value,
+            Err(error) => {
+                return problem_response(
+                    ApiError::new(
+                        ErrorCode::InternalError,
+                        format!("Web Bot Auth agent card is invalid: {error}"),
+                    ),
+                    "/signature-agent-card",
+                    &id,
+                )
+            }
+        }
+    } else {
+        serde_json::json!({
+            "name":"Searxflare",
+            "description":"API-only Rust metasearch worker",
+            "signature_directory":env_text(&ctx.env, "WEB_BOT_AUTH_DIRECTORY_URL"),
+        })
+    };
+    json_response(&value, 200, &id)
 }
 
 fn parse_csv(value: Option<String>) -> Vec<String> {
@@ -290,7 +414,23 @@ fn resolve_search_request(
     Ok((request, resolution))
 }
 
-fn select_engines(query: &NormalizedQuery) -> Result<Vec<&'static RegisteredEngine>, ApiError> {
+fn experimental_engine_enabled(engine_id: &str, env: &Env) -> bool {
+    let binding = match engine_id {
+        "google-web" => Some("ENABLE_GOOGLE"),
+        "startpage-web" => Some("ENABLE_STARTPAGE"),
+        _ => None,
+    };
+    binding.is_none_or(|binding| {
+        env.var(binding)
+            .map(|value| value.to_string().eq_ignore_ascii_case("true"))
+            .unwrap_or(false)
+    })
+}
+
+fn select_engines(
+    query: &NormalizedQuery,
+    env: &Env,
+) -> Result<Vec<&'static RegisteredEngine>, ApiError> {
     let requested = if query.engines.is_empty() {
         let category_matches: Vec<String> = if query.categories.is_empty() {
             default_engine_ids()
@@ -323,6 +463,15 @@ fn select_engines(query: &NormalizedQuery) -> Result<Vec<&'static RegisteredEngi
         })?;
         if !engine.descriptor().default_enabled && query.engines.is_empty() {
             continue;
+        }
+        if !experimental_engine_enabled(engine.descriptor().id, env) {
+            return Err(ApiError::new(
+                ErrorCode::EngineDisabled,
+                format!(
+                    "experimental engine {} is disabled by configuration",
+                    engine.descriptor().id
+                ),
+            ));
         }
         selected.push(engine);
     }
@@ -365,15 +514,17 @@ fn engine_cache_key(query: &NormalizedQuery, engine: &'static RegisteredEngine) 
 
 async fn run_engine(
     engine: &'static RegisteredEngine,
-    query: &NormalizedQuery,
+    query: NormalizedQuery,
     http: &WorkerFetchClient,
-    state: &NoopEngineState,
+    state: &dyn EngineState,
+    secrets: &dyn EngineSecrets,
+    coordinator: &dyn ProviderCoordinator,
     deadline: Deadline,
     request_id: &str,
     execution: Rc<Context>,
 ) -> EngineRun {
     let started = Date::now().as_millis() as u64;
-    let cache_key = engine_cache_key(query, engine);
+    let cache_key = engine_cache_key(&query, engine);
     let cache = Cache::default();
     if let Ok(Some(mut cached)) = cache.get(&cache_key, true).await {
         let negative = cached
@@ -392,6 +543,9 @@ async fn run_engine(
                         duration_ms: (Date::now().as_millis() as u64).saturating_sub(started),
                         cache_status: CacheStatus::NegativeHit,
                         result_count: 0,
+                        response_bytes: 0,
+                        parse_ms: 0,
+                        redirect_count: 0,
                         failure_kind: Some(failure.kind.as_code().into()),
                         parser_version: Some(engine.descriptor().parser_version.into()),
                     },
@@ -404,6 +558,9 @@ async fn run_engine(
                     duration_ms: (Date::now().as_millis() as u64).saturating_sub(started),
                     cache_status: CacheStatus::Hit,
                     result_count: output.results.len(),
+                    response_bytes: output.response_bytes,
+                    parse_ms: output.parse_ms,
+                    redirect_count: output.redirect_count,
                     failure_kind: None,
                     parser_version: Some(engine.descriptor().parser_version.into()),
                 },
@@ -414,10 +571,13 @@ async fn run_engine(
 
     let result = engine
         .search(
-            query,
+            &query,
             &EngineContext {
                 http,
                 state,
+                secrets,
+                coordinator,
+                now_ms: Date::now().as_millis() as u64,
                 deadline,
                 request_id,
             },
@@ -446,6 +606,9 @@ async fn run_engine(
                     duration_ms,
                     cache_status: CacheStatus::Miss,
                     result_count: output.results.len(),
+                    response_bytes: output.response_bytes,
+                    parse_ms: output.parse_ms,
+                    redirect_count: output.redirect_count,
                     failure_kind: None,
                     parser_version: Some(engine.descriptor().parser_version.into()),
                 },
@@ -474,6 +637,9 @@ async fn run_engine(
                     duration_ms,
                     cache_status: CacheStatus::Miss,
                     result_count: 0,
+                    response_bytes: 0,
+                    parse_ms: 0,
+                    redirect_count: 0,
                     failure_kind: Some(failure.kind.as_code().into()),
                     parser_version: Some(engine.descriptor().parser_version.into()),
                 },
@@ -595,25 +761,46 @@ fn write_analytics(env: &Env, reports: &[EngineExecutionReport]) {
             .add_blob(cache_status)
             .add_blob("unknown")
             .add_double(report.duration_ms as f64)
-            .add_double(0.0)
-            .add_double(0.0)
+            .add_double(report.response_bytes as f64)
+            .add_double(report.parse_ms as f64)
             .add_double(report.result_count as f64)
-            .add_double(0.0)
+            .add_double(report.redirect_count as f64)
             .write_to(&dataset);
     }
 }
 
 async fn execute_search(
-    query: NormalizedQuery,
+    mut query: NormalizedQuery,
     resolution: &BangResolution,
     ctx: &RouteContext<AppData>,
     id: &str,
 ) -> Result<SearchResponse, ApiError> {
-    let selected = select_engines(&query)?;
+    let selected = select_engines(&query, &ctx.env)?;
     let resolved_engines: Vec<String> = selected
         .iter()
         .map(|engine| engine.descriptor().id.to_owned())
         .collect();
+    let cursor_query_hash = cursor_query_hash(&query, resolution, &selected);
+    let mut engine_cursors = BTreeMap::new();
+    if let Some(cursor) = query.cursor.take() {
+        let key = ctx.env.secret("CURSOR_SIGNING_KEY").map_err(|_| {
+            ApiError::new(
+                ErrorCode::InternalError,
+                "CURSOR_SIGNING_KEY is required to accept search cursors",
+            )
+        })?;
+        let payload = CursorSigner::new(key.to_string().as_bytes())
+            .decode(&cursor, Date::now().as_millis() as u64)
+            .map_err(|error| ApiError::new(ErrorCode::InvalidCursor, error.to_string()))?;
+        if payload.query_hash != cursor_query_hash {
+            return Err(ApiError::new(
+                ErrorCode::InvalidCursor,
+                "cursor does not belong to this query and engine selection",
+            ));
+        }
+        query.page = Some(payload.page);
+        engine_cursors = payload.engine_cursors;
+    }
     let cache_key = aggregate_cache_key(&query, resolution, &selected);
     if let Ok(Some(mut cached)) = Cache::default().get(&cache_key, true).await {
         if let Ok(mut response) = cached.json::<SearchResponse>().await {
@@ -623,16 +810,40 @@ async fn execute_search(
         }
     }
 
-    let http = WorkerFetchClient;
-    let state = NoopEngineState;
+    let http = WorkerFetchClient::new(bot_auth_config(&ctx.env));
+    let noop_state = NoopEngineState;
+    let kv_state = ctx
+        .env
+        .kv("ENGINE_STATE")
+        .ok()
+        .map(|kv| KvEngineState::new(kv, "engine-state-v1"));
+    let state: &dyn EngineState = kv_state
+        .as_ref()
+        .map(|state| state as &dyn EngineState)
+        .unwrap_or(&noop_state);
+    let secrets = WorkerEngineSecrets { env: &ctx.env };
+    let noop_coordinator = NoopProviderCoordinator;
+    let durable_coordinator = ctx
+        .env
+        .durable_object("PROVIDER_COORDINATOR")
+        .ok()
+        .map(DurableObjectProviderCoordinator::new);
+    let coordinator: &dyn ProviderCoordinator = durable_coordinator
+        .as_ref()
+        .map(|coordinator| coordinator as &dyn ProviderCoordinator)
+        .unwrap_or(&noop_coordinator);
     let deadline = Deadline::from_now(Date::now().as_millis() as u64, query.timeout_ms);
     let mut futures = FuturesUnordered::new();
     for engine in selected.iter().copied() {
+        let mut engine_query = query.clone();
+        engine_query.cursor = engine_cursors.get(engine.descriptor().id).cloned();
         futures.push(run_engine(
             engine,
-            &query,
+            engine_query,
             &http,
-            &state,
+            state,
+            &secrets,
+            coordinator,
             deadline,
             id,
             Rc::clone(&ctx.data.execution),
@@ -642,11 +853,18 @@ async fn execute_search(
     let mut reports = Vec::new();
     let mut normalized = Vec::new();
     let mut failures = Vec::new();
+    let mut next_engine_cursors = BTreeMap::new();
+    let mut may_have_more = false;
     let mut successful_engines = 0usize;
     while let Some(run) = futures.next().await {
         let EngineRun { output, mut report } = run;
         match output {
             Ok(output) => {
+                may_have_more |= output.next_cursor.is_some()
+                    || output.results.len() >= usize::from(query.limit);
+                if let Some(cursor) = output.next_cursor.clone() {
+                    next_engine_cursors.insert(report.engine_id.clone(), cursor);
+                }
                 let mut engine_invalid = None;
                 let mut engine_results = Vec::new();
                 for result in output.results {
@@ -701,6 +919,20 @@ async fn execute_search(
     )
     .map_err(|error| ApiError::new(ErrorCode::InternalError, error.to_string()))?;
     results.truncate(usize::from(query.limit));
+    let next_cursor = if may_have_more {
+        ctx.env.secret("CURSOR_SIGNING_KEY").ok().and_then(|key| {
+            CursorSigner::new(key.to_string().as_bytes())
+                .encode(&CursorPayload {
+                    query_hash: cursor_query_hash,
+                    page: query.page_number().saturating_add(1),
+                    engine_cursors: next_engine_cursors,
+                    expires_at_ms: (Date::now().as_millis() as u64).saturating_add(15 * 60 * 1_000),
+                })
+                .ok()
+        })
+    } else {
+        None
+    };
     let partial = !failures.is_empty();
     let response = SearchResponse {
         request_id: id.into(),
@@ -713,6 +945,7 @@ async fn execute_search(
         partial,
         cached: false,
         result_count: results.len(),
+        next_cursor,
         results,
         engines: reports,
     };
@@ -739,6 +972,62 @@ async fn execute_search(
     Ok(response)
 }
 
+fn cursor_query_hash(
+    query: &NormalizedQuery,
+    resolution: &BangResolution,
+    selected: &[&'static RegisteredEngine],
+) -> String {
+    let value = serde_json::json!({
+        "query": resolution.provider_query,
+        "engines": selected.iter().map(|engine| engine.descriptor().id).collect::<Vec<_>>(),
+        "categories": query.categories,
+        "limit": query.limit,
+        "locale": query.locale,
+        "country": query.country,
+        "safe_search": query.safe_search,
+        "time_range": query.time_range,
+        "ranking": query.ranking,
+    });
+    sha256_hex(value.to_string().as_bytes())
+}
+
+async fn enforce_search_rate_limit(req: &Request, env: &Env) -> Result<(), ApiError> {
+    let authorization = req
+        .headers()
+        .get("authorization")
+        .ok()
+        .flatten()
+        .unwrap_or_default();
+    let client_ip = req
+        .headers()
+        .get("cf-connecting-ip")
+        .ok()
+        .flatten()
+        .unwrap_or_else(|| "unknown".into());
+    let key_material = if authorization.is_empty() {
+        client_ip
+    } else {
+        authorization
+    };
+    let key = sha256_hex(key_material.as_bytes());
+    let Ok(limiter) = env.rate_limiter("SEARCH_RATE_LIMITER") else {
+        return Ok(());
+    };
+    let outcome = limiter.limit(key).await.map_err(|error| {
+        ApiError::new(
+            ErrorCode::InternalError,
+            format!("search rate limiter failed: {error}"),
+        )
+    })?;
+    if !outcome.success {
+        return Err(ApiError::new(
+            ErrorCode::RateLimited,
+            "search request rate limit exceeded",
+        ));
+    }
+    Ok(())
+}
+
 async fn handle_search_request(
     req: Request,
     ctx: RouteContext<AppData>,
@@ -747,6 +1036,9 @@ async fn handle_search_request(
 ) -> worker::Result<Response> {
     let id = request_id();
     let path = req.path();
+    if let Err(error) = enforce_search_rate_limit(&req, &ctx.env).await {
+        return problem_response(error, &path, &id);
+    }
     if require_auth {
         if let Err(error) = authenticate(&req, &ctx.env) {
             return problem_response(error, &path, &id);
@@ -780,6 +1072,14 @@ async fn search_get(req: Request, ctx: RouteContext<AppData>) -> worker::Result<
         Err(error) => return problem_response(error, &req.path(), &request_id()),
     };
     handle_search_request(req, ctx, request, true).await
+}
+
+async fn ui_search(req: Request, ctx: RouteContext<AppData>) -> worker::Result<Response> {
+    let request = match request_from_url(&req, false) {
+        Ok(request) => request,
+        Err(error) => return problem_response(error, &req.path(), &request_id()),
+    };
+    handle_search_request(req, ctx, request, false).await
 }
 
 async fn search_post(mut req: Request, ctx: RouteContext<AppData>) -> worker::Result<Response> {
@@ -857,6 +1157,12 @@ async fn engine_search(req: Request, ctx: RouteContext<AppData>) -> worker::Resu
 
 async fn searx_compat(req: Request, ctx: RouteContext<AppData>) -> worker::Result<Response> {
     let id = request_id();
+    if let Err(error) = enforce_search_rate_limit(&req, &ctx.env).await {
+        return problem_response(error, &req.path(), &id);
+    }
+    if let Err(error) = authenticate(&req, &ctx.env) {
+        return problem_response(error, &req.path(), &id);
+    }
     let request = match request_from_url(&req, true) {
         Ok(request) => request,
         Err(error) => return problem_response(error, &req.path(), &id),

@@ -1,7 +1,7 @@
 import { env, exports } from "cloudflare:workers";
 import { createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import WorkerEntrypoint from "../../crates/metasearch-worker/build/worker/shim.mjs";
+import WorkerEntrypoint from "../../crates/metasearch-worker/worker/facade.mjs";
 
 const AUTH = { authorization: "Bearer test-api-key" };
 
@@ -60,11 +60,43 @@ function mockProviders({ duckFailure = false, delayArxiv = false, emptyWikipedia
 afterEach(() => vi.unstubAllGlobals());
 
 describe("Worker routes", () => {
+  it("serves the public search interface", async () => {
+    const response = await exports.default.fetch("https://example.com/");
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain("text/html");
+    expect(await response.text()).toContain("Searxflare");
+  });
+
+  it("lets the rate-limited interface search without exposing the API key", async () => {
+    mockProviders();
+    const response = await exports.default.fetch("https://example.com/ui/search?q=cloudflare");
+    expect(response.status).toBe(200);
+    expect((await response.json()).results.length).toBeGreaterThan(0);
+  });
+
   it("serves unauthenticated health checks", async () => {
     const response = await exports.default.fetch("https://example.com/healthz");
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ status: "ok" });
     expect(response.headers.get("x-request-id")).toBeTruthy();
+  });
+
+  it("publishes Web Bot Auth identity and signs opted-in requests", async () => {
+    const directory = await exports.default.fetch("https://example.com/.well-known/http-message-signatures-directory");
+    expect(directory.status).toBe(200);
+    expect(directory.headers.get("content-type")).toContain("application/http-message-signatures-directory+json");
+    expect((await directory.json()).keys[0].kid).toBe("test");
+
+    const mock = mockProviders();
+    const response = await exports.default.fetch(new Request("https://example.com/v1/search?q=cloudflare&engines=brave-web", { headers: AUTH }));
+    expect(response.status).toBe(200);
+    const request = mock.mock.calls
+      .map(([input, init]) => input instanceof Request ? input : new Request(input, init))
+      .find((candidate) => new URL(candidate.url).hostname === "search.brave.com");
+    expect(request.headers.get("signature-agent")).toBe("\"https://example.com/.well-known/http-message-signatures-directory\"");
+    expect(request.headers.get("signature-input")).toContain("keyid=\"https://example.com/.well-known/http-message-signatures-directory#test\"");
+    expect(request.headers.get("signature-input")).toContain("tag=\"web-bot-auth\"");
+    expect(request.headers.get("signature")).toMatch(/^sig1=:/);
   });
 
   it("protects the v1 API", async () => {
@@ -80,7 +112,7 @@ describe("Worker routes", () => {
     expect(response.status).toBe(200);
     const body = await response.json();
     expect(body.engines.map((engine) => engine.id)).toEqual([
-      "arxiv", "wikipedia", "duckduckgo-html", "brave-web", "qwant-web", "pubmed", "semantic-scholar", "crossref", "github", "mojeek-web", "yahoo-web", "yandex-web", "baidu-web", "google-web", "grokipedia"
+      "arxiv", "wikipedia", "duckduckgo-html", "brave-web", "brave-news", "qwant-web", "pubmed", "semantic-scholar", "crossref", "github", "mojeek-web", "yahoo-web", "yandex-web", "baidu-web", "google-web", "grokipedia", "wolframalpha", "openalex", "exa-mcp", "startpage-web"
     ]);
   });
 
@@ -190,7 +222,7 @@ describe("Worker routes", () => {
     expect(body.results.flatMap((result) => result.engines)).toEqual(expect.arrayContaining(["pubmed", "semantic-scholar", "crossref"]));
   });
 
-  it("keeps an empty successful engine as a partial response", async () => {
+  it("keeps an empty successful engine as a partial response during shared cooldown", async () => {
     mockProviders({ duckFailure: true, emptyWikipedia: true });
     const response = await exports.default.fetch(new Request("https://example.com/v1/search?q=missing&engines=wikipedia,duckduckgo-html", { headers: AUTH }));
     expect(response.status).toBe(200);
@@ -198,7 +230,7 @@ describe("Worker routes", () => {
     expect(body.partial).toBe(true);
     expect(body.results).toEqual([]);
     expect(body.engines.find((engine) => engine.engine_id === "wikipedia").failure_kind).toBeUndefined();
-    expect(body.engines.find((engine) => engine.engine_id === "duckduckgo-html").failure_kind).toBe("ENGINE_CHALLENGED");
+    expect(body.engines.find((engine) => engine.engine_id === "duckduckgo-html").failure_kind).toBe("ENGINE_RATE_LIMITED");
   });
 
   it("returns NO_ENGINE_SUCCEEDED when the only engine times out", async () => {
@@ -210,7 +242,7 @@ describe("Worker routes", () => {
 
   it("serves the SearXNG JSON compatibility subset with bangs", async () => {
     mockProviders();
-    const response = await exports.default.fetch("https://example.com/search?q=!wp+rust&format=json");
+    const response = await exports.default.fetch(new Request("https://example.com/search?q=!wp+rust&format=json", { headers: AUTH }));
     expect(response.status).toBe(200);
     const body = await response.json();
     expect(body.query).toBe("!wp rust");

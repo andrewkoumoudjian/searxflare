@@ -40,7 +40,15 @@ pub static DESCRIPTOR: EngineDescriptor = EngineDescriptor {
     bot_auth_policy: BotAuthPolicy::Disabled,
 };
 
+#[cfg(test)]
 fn build_request(query: &NormalizedQuery) -> Result<EngineRequest, EngineFailure> {
+    build_request_with_token(query, None)
+}
+
+fn build_request_with_token(
+    query: &NormalizedQuery,
+    token: Option<&str>,
+) -> Result<EngineRequest, EngineFailure> {
     if query.time_range.is_some() {
         return Err(EngineFailure::new(
             DESCRIPTOR.id,
@@ -59,17 +67,21 @@ fn build_request(query: &NormalizedQuery) -> Result<EngineRequest, EngineFailure
         .append_pair("page", &query.page_number().to_string())
         .append_pair("per_page", &query.limit.to_string());
 
+    let mut headers = BTreeMap::from([
+        ("accept".into(), "application/vnd.github+json".into()),
+        ("x-github-api-version".into(), "2026-03-10".into()),
+        (
+            "user-agent".into(),
+            "searxflare/0.1 (+https://github.com/andrewkoumoudjian/searxflare)".into(),
+        ),
+    ]);
+    if let Some(token) = token {
+        headers.insert("authorization".into(), format!("Bearer {token}"));
+    }
     Ok(EngineRequest {
         method: EngineMethod::Get,
         url,
-        headers: BTreeMap::from([
-            ("accept".into(), "application/vnd.github+json".into()),
-            ("x-github-api-version".into(), "2026-03-10".into()),
-            (
-                "user-agent".into(),
-                "searxflare/0.1 (+https://github.com/andrewkoumoudjian/searxflare)".into(),
-            ),
-        ]),
+        headers,
         cookies: BTreeMap::new(),
         body: None,
         accepted_content_types: &["application/json", "application/vnd.github+json"],
@@ -205,7 +217,8 @@ impl SearchEngine for GitHubEngine {
         query: &NormalizedQuery,
         context: &EngineContext<'_>,
     ) -> Result<EngineOutput, EngineFailure> {
-        let request = build_request(query)?;
+        let token = context.secrets.get(DESCRIPTOR.id, "api_key");
+        let request = build_request_with_token(query, token.as_deref())?;
         let response = context
             .http
             .send(&DESCRIPTOR, request, context.deadline)
@@ -213,6 +226,7 @@ impl SearchEngine for GitHubEngine {
         let results = parse_results(&response.body)?;
         Ok(EngineOutput {
             results,
+            next_cursor: None,
             upstream_requests: 1,
             response_bytes: response.body.len(),
             parse_ms: 0,
