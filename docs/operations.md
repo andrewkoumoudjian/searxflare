@@ -20,7 +20,7 @@ Use the `Authorization` header as the API Shield session identifier. Add mTLS or
 - `CRAWL_STATE`: KV namespace for page freshness markers and the bounded crawl frontier.
 - `CRAWL_SEARCH`: optional AI Search instance binding for the R2 corpus.
 
-Provider credentials are isolated by binding name: `GITHUB_TOKEN`, `SEMANTIC_SCHOLAR_API_KEY`, `OPENALEX_API_KEY`, `WOLFRAM_APP_ID`, `EXA_API_KEY`, and `CROSSREF_MAILTO`.
+Optional provider credentials and operator metadata are isolated by binding name: `GITHUB_TOKEN`, `EXA_API_KEY`, and `CROSSREF_MAILTO`. No registered engine requires a provider API key; GitHub and Exa use their public unauthenticated capacity when their optional credentials are absent.
 
 ## Crawl and AI Search limits
 

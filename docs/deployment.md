@@ -14,9 +14,6 @@ Configure the cursor key and any provider credentials through Worker secrets:
 ```bash
 npx wrangler secret put CURSOR_SIGNING_KEY
 npx wrangler secret put GITHUB_TOKEN
-npx wrangler secret put SEMANTIC_SCHOLAR_API_KEY
-npx wrangler secret put OPENALEX_API_KEY
-npx wrangler secret put WOLFRAM_APP_ID
 npx wrangler secret put EXA_API_KEY
 ```
 
@@ -68,7 +65,7 @@ Verify:
 
 1. `GET /healthz` returns `200` without authentication.
 2. `GET /readyz` returns `200` only when `API_KEY_SHA256` is configured.
-3. The authenticated engine catalogue returns the twenty compiled engines.
+3. The authenticated engine catalogue returns the nineteen compiled engines.
 4. Each single-engine debug route returns results or a classified provider failure.
 5. A default authenticated search returns a deterministic JSON response.
 6. A deliberate provider failure produces a partial result when another engine succeeds.

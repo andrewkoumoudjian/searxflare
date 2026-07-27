@@ -40,15 +40,17 @@ pub static DESCRIPTOR: EngineDescriptor = EngineDescriptor {
     bot_auth_policy: BotAuthPolicy::Disabled,
 };
 
-fn rpc_request(api_key: &str, session: Option<&str>, body: Value) -> EngineRequest {
+fn rpc_request(api_key: Option<&str>, session: Option<&str>, body: Value) -> EngineRequest {
     let mut headers = BTreeMap::from([
         (
             "accept".into(),
             "application/json, text/event-stream".into(),
         ),
         ("content-type".into(), "application/json".into()),
-        ("x-api-key".into(), api_key.into()),
     ]);
+    if let Some(api_key) = api_key {
+        headers.insert("x-api-key".into(), api_key.into());
+    }
     if let Some(session) = session {
         headers.insert("mcp-session-id".into(), session.into());
     }
@@ -88,6 +90,51 @@ fn parse_rpc(body: &[u8]) -> Result<Value, EngineFailure> {
     })
 }
 
+fn parse_plain_text_results(text: &str) -> Vec<ProviderResult> {
+    let mut results = Vec::new();
+    for block in text.split("\n\n---\n\n") {
+        let mut title = None;
+        let mut url = None;
+        let mut published_at = None;
+        let mut content = None;
+        let mut lines = block.lines();
+        while let Some(line) = lines.next() {
+            if let Some(value) = line.strip_prefix("Title: ") {
+                title = Some(value.trim());
+            } else if let Some(value) = line.strip_prefix("URL: ") {
+                url = Some(value.trim());
+            } else if let Some(value) = line.strip_prefix("Published: ") {
+                let value = value.trim();
+                if value != "N/A" && !value.is_empty() {
+                    published_at = Some(value.to_owned());
+                }
+            } else if line == "Highlights:" {
+                content = Some(lines.collect::<Vec<_>>().join("\n"));
+                break;
+            }
+        }
+        let Some(url) = url.filter(|value| Url::parse(value).is_ok()) else {
+            continue;
+        };
+        results.push(ProviderResult {
+            url: url.into(),
+            title: title
+                .filter(|value| !value.is_empty())
+                .unwrap_or(url)
+                .into(),
+            content: content.unwrap_or_default().trim().into(),
+            published_at,
+            thumbnail: None,
+            category: "general".into(),
+            metadata: Map::new(),
+            engine_id: DESCRIPTOR.id.into(),
+            position: (results.len() + 1) as u32,
+            engine_weight: DESCRIPTOR.weight,
+        });
+    }
+    results
+}
+
 fn parse_results(root: &Value) -> Result<Vec<ProviderResult>, EngineFailure> {
     if let Some(error) = root.get("error") {
         return Err(EngineFailure::new(
@@ -109,8 +156,15 @@ fn parse_results(root: &Value) -> Result<Vec<ProviderResult>, EngineFailure> {
     let embedded = content
         .iter()
         .filter_map(|item| item.get("text").and_then(Value::as_str))
-        .find_map(|text| serde_json::from_str::<Value>(text).ok())
-        .unwrap_or_else(|| json!({"results":[]}));
+        .find_map(|text| serde_json::from_str::<Value>(text).ok());
+    let Some(embedded) = embedded else {
+        let text = content
+            .iter()
+            .filter_map(|item| item.get("text").and_then(Value::as_str))
+            .collect::<Vec<_>>()
+            .join("\n\n---\n\n");
+        return Ok(parse_plain_text_results(&text));
+    };
     let items = embedded
         .get("results")
         .and_then(Value::as_array)
@@ -167,22 +221,13 @@ impl SearchEngine for ExaMcpEngine {
         query: &NormalizedQuery,
         context: &EngineContext<'_>,
     ) -> Result<EngineOutput, EngineFailure> {
-        let api_key = context
-            .secrets
-            .get(DESCRIPTOR.id, "api_key")
-            .ok_or_else(|| {
-                EngineFailure::new(
-                    DESCRIPTOR.id,
-                    FailureKind::EngineDisabled,
-                    "EXA_API_KEY is not configured",
-                )
-            })?;
+        let api_key = context.secrets.get(DESCRIPTOR.id, "api_key");
         let initialize = context
             .http
             .send(
                 &DESCRIPTOR,
                 rpc_request(
-                    &api_key,
+                    api_key.as_deref(),
                     None,
                     json!({
                         "jsonrpc":"2.0",
@@ -212,7 +257,7 @@ impl SearchEngine for ExaMcpEngine {
             .send(
                 &DESCRIPTOR,
                 rpc_request(
-                    &api_key,
+                    api_key.as_deref(),
                     session,
                     json!({
                         "jsonrpc":"2.0",
@@ -227,7 +272,7 @@ impl SearchEngine for ExaMcpEngine {
             .send(
                 &DESCRIPTOR,
                 rpc_request(
-                    &api_key,
+                    api_key.as_deref(),
                     session,
                     json!({
                         "jsonrpc":"2.0",
@@ -265,6 +310,17 @@ mod tests {
     use super::*;
 
     #[test]
+    fn hosted_mcp_authentication_is_optional() {
+        let request = rpc_request(None, None, json!({"jsonrpc":"2.0","id":1}));
+        assert!(!request.headers.contains_key("x-api-key"));
+        let request = rpc_request(Some("configured"), None, json!({"jsonrpc":"2.0","id":1}));
+        assert_eq!(
+            request.headers.get("x-api-key").map(String::as_str),
+            Some("configured")
+        );
+    }
+
+    #[test]
     fn parses_json_and_sse_tool_results() {
         let result = json!({
             "jsonrpc":"2.0",
@@ -276,5 +332,20 @@ mod tests {
 
         let sse = b"event: message\ndata: {\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{}}\n\n";
         assert_eq!(parse_rpc(sse).unwrap()["id"], 1);
+    }
+
+    #[test]
+    fn parses_hosted_mcp_plain_text_results() {
+        let root = json!({
+            "jsonrpc":"2.0",
+            "id":2,
+            "result":{"content":[{"type":"text","text":
+                "Title: Cloudflare\nURL: https://www.cloudflare.com/\nPublished: N/A\nAuthor: N/A\nHighlights:\nCloud platform result.\n\n---\n\nTitle: Workers\nURL: https://workers.cloudflare.com/\nPublished: 2026-07-01\nAuthor: N/A\nHighlights:\nEdge runtime."
+            }]}
+        });
+        let parsed = parse_results(&root).unwrap();
+        assert_eq!(parsed.len(), 2);
+        assert_eq!(parsed[0].title, "Cloudflare");
+        assert_eq!(parsed[1].published_at.as_deref(), Some("2026-07-01"));
     }
 }

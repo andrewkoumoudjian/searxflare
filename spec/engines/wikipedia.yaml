@@ -1,12 +1,12 @@
 id: wikipedia
 display_name: Wikipedia
-endpoint: https://en.wikipedia.org/w/api.php
+endpoint: https://en.wikipedia.org/api/rest_v1/page/summary
 method: GET
 categories: [reference]
 source_kind: json
 allowed_hosts: [en.wikipedia.org, fr.wikipedia.org, de.wikipedia.org, es.wikipedia.org]
 capabilities:
-  paging: true
+  paging: false
   locale: true
   country: false
   safe_search: false
@@ -17,10 +17,10 @@ limits:
   max_steps: 3
   max_redirects: 2
 versions:
-  parser: wikipedia-action-json-v1
+  parser: wikipedia-rest-summary-json-v2
 cache:
   response_ttl_seconds: 1800
   negative_ttl_seconds: 30
 state: stateless
 default_enabled: true
-notes: Uses the MediaWiki Action API with generator=search, namespace 0, bounded limit/offset, plaintext introductory extracts, canonical page URLs and optional thumbnails. Locale selection is restricted to the four compile-time hosts; unsupported locales fall back to English.
+notes: Uses MediaWiki's REST summary route for a single title-oriented reference result with canonical page URL, extract and optional thumbnail. Locale selection is restricted to four compile-time hosts; unsupported locales fall back to English.

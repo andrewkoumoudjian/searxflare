@@ -16,7 +16,7 @@ pub static DESCRIPTOR: EngineDescriptor = EngineDescriptor {
     categories: &["general", "reference"],
     source_kind: SourceKind::Json,
     maturity: EngineMaturity::Experimental,
-    allowed_hosts: &["api.x.ai"],
+    allowed_hosts: &["grokipedia.com"],
     capabilities: EngineCapabilities {
         paging: true,
         locale: false,
@@ -29,7 +29,7 @@ pub static DESCRIPTOR: EngineDescriptor = EngineDescriptor {
     max_steps: DEFAULT_MAX_STEPS,
     max_redirects: DEFAULT_MAX_REDIRECTS,
     weight: 0.9,
-    parser_version: "grokipedia-json-v1",
+    parser_version: "grokipedia-full-text-json-v2",
     default_enabled: true,
     allow_http: false,
     state_policy: StatePolicy::Stateless,
@@ -59,7 +59,7 @@ fn build_request(query: &NormalizedQuery) -> Result<EngineRequest, EngineFailure
 
     let count = u32::from(query.limit.min(20));
     let offset = page.saturating_sub(1).saturating_mul(count);
-    let mut url = Url::parse("https://api.x.ai/grokipedia/v1/search").map_err(|error| {
+    let mut url = Url::parse("https://grokipedia.com/api/full-text-search").map_err(|error| {
         EngineFailure::new(DESCRIPTOR.id, FailureKind::Internal, error.to_string())
     })?;
     url.query_pairs_mut()
@@ -223,7 +223,8 @@ mod tests {
     fn builds_bounded_search_request() {
         let request = build_request(&query()).unwrap();
         let parameters: BTreeMap<_, _> = request.url.query_pairs().into_owned().collect();
-        assert_eq!(request.url.host_str(), Some("api.x.ai"));
+        assert_eq!(request.url.host_str(), Some("grokipedia.com"));
+        assert_eq!(request.url.path(), "/api/full-text-search");
         assert_eq!(
             parameters.get("query").map(String::as_str),
             Some("cloudflare")

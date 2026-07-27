@@ -23,4 +23,4 @@ cache:
   negative_ttl_seconds: 60
 state: stateless
 default_enabled: true
-notes: Bounded Streamable HTTP MCP adapter that initializes a session and invokes web_search_exa using EXA_API_KEY without exposing arbitrary tools, methods, hosts, or headers.
+notes: Bounded Streamable HTTP MCP adapter that initializes a session and invokes only web_search_exa. The hosted free service works without an API key; an optional EXA_API_KEY raises its provider rate limits.

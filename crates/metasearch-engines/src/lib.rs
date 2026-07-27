@@ -18,7 +18,6 @@ mod semantic_scholar;
 mod startpage;
 mod text;
 mod wikipedia;
-mod wolframalpha;
 mod yahoo;
 mod yandex;
 

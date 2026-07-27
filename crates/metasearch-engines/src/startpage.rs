@@ -1,3 +1,4 @@
+use crate::text::strip_markup;
 use metasearch_core::{
     BotAuthPolicy, CachePolicy, EngineCapabilities, EngineContext, EngineDescriptor, EngineFailure,
     EngineMaturity, EngineMethod, EngineOutput, EngineRequest, FailureKind, NormalizedQuery,
@@ -6,7 +7,7 @@ use metasearch_core::{
     HTML_ENGINE_TIMEOUT_MS,
 };
 use metasearch_parsers::{parse_selector_results, SelectorResultSpec};
-use serde_json::Map;
+use serde_json::{Map, Value};
 use std::collections::BTreeMap;
 use url::Url;
 
@@ -31,7 +32,7 @@ pub static DESCRIPTOR: EngineDescriptor = EngineDescriptor {
     max_steps: DEFAULT_MAX_STEPS,
     max_redirects: DEFAULT_MAX_REDIRECTS,
     weight: 0.9,
-    parser_version: "startpage-web-html-v1",
+    parser_version: "startpage-web-react-v2",
     default_enabled: true,
     allow_http: false,
     state_policy: StatePolicy::DurableCoordinator,
@@ -51,6 +52,9 @@ const SELECTORS: SelectorResultSpec = SelectorResultSpec {
     thumbnail: None,
 };
 
+const SC_CODE_STATE_KEY: &str = "sc-code";
+const REACT_MARKER: &str = "React.createElement(UIStartpage.AppSerpWeb, ";
+
 fn date_filter(value: TimeRange) -> &'static str {
     match value {
         TimeRange::Day => "d",
@@ -60,7 +64,69 @@ fn date_filter(value: TimeRange) -> &'static str {
     }
 }
 
-fn build_request(query: &NormalizedQuery) -> Result<EngineRequest, EngineFailure> {
+fn safe_search_code(value: SafeSearch) -> &'static str {
+    match value {
+        SafeSearch::Off => "none",
+        SafeSearch::Moderate => "moderate",
+        SafeSearch::Strict => "heavy",
+    }
+}
+
+fn build_home_request() -> Result<EngineRequest, EngineFailure> {
+    Ok(EngineRequest {
+        method: EngineMethod::Get,
+        url: Url::parse("https://www.startpage.com/").map_err(|error| {
+            EngineFailure::new(DESCRIPTOR.id, FailureKind::Internal, error.to_string())
+        })?,
+        headers: BTreeMap::from([
+            ("accept".into(), "text/html,application/xhtml+xml".into()),
+            ("accept-language".into(), "en-US,en;q=0.8".into()),
+            (
+                "user-agent".into(),
+                "Searxflare/0.1 (+https://github.com/andrewkoumoudjian/searxflare)".into(),
+            ),
+        ]),
+        cookies: BTreeMap::new(),
+        body: None,
+        accepted_content_types: &["text/html", "application/xhtml+xml"],
+    })
+}
+
+fn extract_sc_code(body: &[u8]) -> Result<String, EngineFailure> {
+    let html = String::from_utf8_lossy(body);
+    let name = html.find("name=\"sc\"").or_else(|| html.find("name='sc'"));
+    let position = name.ok_or_else(|| {
+        EngineFailure::new(
+            DESCRIPTOR.id,
+            FailureKind::EngineChallenged,
+            "Startpage homepage did not expose an sc search token",
+        )
+    })?;
+    let start = html[..position].rfind("<input").unwrap_or(position);
+    let end = html[position..]
+        .find('>')
+        .map(|offset| position + offset + 1)
+        .unwrap_or_else(|| html.len().min(position + 1024));
+    let input = &html[start..end];
+    for quote in ['"', '\''] {
+        let marker = format!("value={quote}");
+        if let Some(value_start) = input.find(&marker) {
+            let value_start = value_start + marker.len();
+            if let Some(value) = input[value_start..].split(quote).next() {
+                if !value.is_empty() && value.len() <= 512 {
+                    return Ok(value.into());
+                }
+            }
+        }
+    }
+    Err(EngineFailure::new(
+        DESCRIPTOR.id,
+        FailureKind::EngineParseFailed,
+        "Startpage sc search token has no value",
+    ))
+}
+
+fn build_request(query: &NormalizedQuery, sc_code: &str) -> Result<EngineRequest, EngineFailure> {
     if query.page_number() > 10 {
         return Err(EngineFailure::new(
             DESCRIPTOR.id,
@@ -72,17 +138,23 @@ fn build_request(query: &NormalizedQuery) -> Result<EngineRequest, EngineFailure
         EngineFailure::new(DESCRIPTOR.id, FailureKind::Internal, error.to_string())
     })?;
     let page = query.page_number().to_string();
-    let safe = match query.safe_search {
-        SafeSearch::Off => "0",
-        SafeSearch::Moderate => "1",
-        SafeSearch::Strict => "2",
-    };
+    let safe = safe_search_code(query.safe_search);
     let mut form = vec![
         ("query", query.text.as_str()),
-        ("page", page.as_str()),
         ("cat", "web"),
-        ("sc", safe),
+        ("t", "device"),
+        ("sc", sc_code),
+        ("abd", "1"),
+        ("abe", "1"),
+        ("qsr", "all"),
+        ("qadf", safe),
+        ("language", "en"),
+        ("lui", "en"),
     ];
+    if query.page_number() > 1 {
+        form.push(("page", page.as_str()));
+        form.push(("segment", "startpage.udog"));
+    }
     let date = query.time_range.map(date_filter);
     if let Some(date) = date {
         form.push(("with_date", date));
@@ -108,11 +180,154 @@ fn build_request(query: &NormalizedQuery) -> Result<EngineRequest, EngineFailure
                 "user-agent".into(),
                 "Searxflare/0.1 (+https://github.com/andrewkoumoudjian/searxflare)".into(),
             ),
+            ("origin".into(), "https://www.startpage.com".into()),
+            ("referer".into(), "https://www.startpage.com/".into()),
         ]),
         cookies: BTreeMap::new(),
         body: Some(body),
         accepted_content_types: &["text/html", "application/xhtml+xml"],
     })
+}
+
+fn react_props(body: &[u8]) -> Result<Option<Value>, EngineFailure> {
+    let html = String::from_utf8_lossy(body);
+    let Some(marker_start) = html.find(REACT_MARKER) else {
+        return Ok(None);
+    };
+    let start = marker_start + REACT_MARKER.len();
+    let bytes = html.as_bytes();
+    let mut depth = 0usize;
+    let mut in_string = false;
+    let mut escaped = false;
+    for index in start..bytes.len() {
+        let byte = bytes[index];
+        if in_string {
+            if escaped {
+                escaped = false;
+            } else if byte == b'\\' {
+                escaped = true;
+            } else if byte == b'"' {
+                in_string = false;
+            }
+            continue;
+        }
+        match byte {
+            b'"' => in_string = true,
+            b'{' => depth = depth.saturating_add(1),
+            b'}' => {
+                depth = depth.saturating_sub(1);
+                if depth == 0 {
+                    return serde_json::from_str(&html[start..=index])
+                        .map(Some)
+                        .map_err(|error| {
+                            EngineFailure::new(
+                                DESCRIPTOR.id,
+                                FailureKind::EngineParseFailed,
+                                error.to_string(),
+                            )
+                        });
+                }
+            }
+            _ => {}
+        }
+    }
+    Err(EngineFailure::new(
+        DESCRIPTOR.id,
+        FailureKind::EngineParseFailed,
+        "Startpage React result payload was truncated",
+    ))
+}
+
+fn provider_result(url: String, title: String, content: String, position: usize) -> ProviderResult {
+    ProviderResult {
+        url,
+        title,
+        content,
+        published_at: None,
+        thumbnail: None,
+        category: "general".into(),
+        metadata: Map::new(),
+        engine_id: DESCRIPTOR.id.into(),
+        position: position as u32,
+        engine_weight: DESCRIPTOR.weight,
+    }
+}
+
+fn parse_results(body: &[u8], request_url: &Url) -> Result<Vec<ProviderResult>, EngineFailure> {
+    if let Some(root) = react_props(body)? {
+        let mainline = root
+            .pointer("/render/presenter/regions/mainline")
+            .and_then(Value::as_array)
+            .ok_or_else(|| {
+                EngineFailure::new(
+                    DESCRIPTOR.id,
+                    FailureKind::EngineParseFailed,
+                    "Startpage React payload is missing mainline regions",
+                )
+            })?;
+        let mut results = Vec::new();
+        for group in mainline {
+            if group.get("display_type").and_then(Value::as_str) != Some("web-google") {
+                continue;
+            }
+            for item in group
+                .get("results")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+            {
+                let Some(url) = item
+                    .get("clickUrl")
+                    .and_then(Value::as_str)
+                    .filter(|url| Url::parse(url).is_ok())
+                else {
+                    continue;
+                };
+                let Some(title) = item
+                    .get("title")
+                    .and_then(Value::as_str)
+                    .map(strip_markup)
+                    .filter(|title| !title.is_empty())
+                else {
+                    continue;
+                };
+                let content = item
+                    .get("description")
+                    .and_then(Value::as_str)
+                    .map(strip_markup)
+                    .unwrap_or_default();
+                results.push(provider_result(
+                    url.into(),
+                    title,
+                    content,
+                    results.len() + 1,
+                ));
+                if results.len() == 20 {
+                    break;
+                }
+            }
+        }
+        return Ok(results);
+    }
+    let parsed = parse_selector_results(body, request_url, &SELECTORS, 20).map_err(|error| {
+        EngineFailure::new(
+            DESCRIPTOR.id,
+            FailureKind::EngineParseFailed,
+            error.to_string(),
+        )
+    })?;
+    Ok(parsed
+        .into_iter()
+        .enumerate()
+        .map(|(index, result)| {
+            provider_result(
+                result.url,
+                result.title,
+                result.description.unwrap_or_default(),
+                index + 1,
+            )
+        })
+        .collect())
 }
 
 #[async_trait::async_trait(?Send)]
@@ -145,7 +360,38 @@ impl SearchEngine for StartpageEngine {
                 "Startpage is in a shared provider cooldown",
             ));
         }
-        let request = build_request(query)?;
+        let mut upstream_requests = 0u8;
+        let mut response_bytes = 0usize;
+        let mut redirect_count = 0u8;
+        let sc_code = if let Some(value) = context
+            .state
+            .get(DESCRIPTOR.id, SC_CODE_STATE_KEY)
+            .await?
+            .and_then(|value| String::from_utf8(value).ok())
+        {
+            value
+        } else {
+            let homepage = context
+                .http
+                .send(&DESCRIPTOR, build_home_request()?, context.deadline)
+                .await?;
+            upstream_requests = upstream_requests.saturating_add(1);
+            response_bytes = response_bytes.saturating_add(homepage.body.len());
+            redirect_count = redirect_count.saturating_add(homepage.redirect_count);
+            let value = extract_sc_code(&homepage.body)?;
+            context
+                .state
+                .put(
+                    DESCRIPTOR.id,
+                    SC_CODE_STATE_KEY,
+                    value.as_bytes(),
+                    Some(3_600),
+                )
+                .await?;
+            value
+        };
+        let request = build_request(query, &sc_code)?;
+        let request_url = request.url.clone();
         let response = match context
             .http
             .send(&DESCRIPTOR, request.clone(), context.deadline)
@@ -172,31 +418,10 @@ impl SearchEngine for StartpageEngine {
                 return Err(failure);
             }
         };
-        let parsed = parse_selector_results(&response.body, &request.url, &SELECTORS, 20).map_err(
-            |error| {
-                EngineFailure::new(
-                    DESCRIPTOR.id,
-                    FailureKind::EngineParseFailed,
-                    error.to_string(),
-                )
-            },
-        )?;
-        let results = parsed
-            .into_iter()
-            .enumerate()
-            .map(|(index, result)| ProviderResult {
-                url: result.url,
-                title: result.title,
-                content: result.description.unwrap_or_default(),
-                published_at: None,
-                thumbnail: None,
-                category: "general".into(),
-                metadata: Map::new(),
-                engine_id: DESCRIPTOR.id.into(),
-                position: (index + 1) as u32,
-                engine_weight: DESCRIPTOR.weight,
-            })
-            .collect();
+        upstream_requests = upstream_requests.saturating_add(1);
+        response_bytes = response_bytes.saturating_add(response.body.len());
+        redirect_count = redirect_count.saturating_add(response.redirect_count);
+        let results = parse_results(&response.body, &request_url)?;
         let _ = context
             .coordinator
             .execute(
@@ -209,10 +434,10 @@ impl SearchEngine for StartpageEngine {
         Ok(EngineOutput {
             results,
             next_cursor: None,
-            upstream_requests: 1,
-            response_bytes: response.body.len(),
+            upstream_requests,
+            response_bytes,
             parse_ms: 0,
-            redirect_count: response.redirect_count,
+            redirect_count,
         })
     }
 }
@@ -238,10 +463,28 @@ mod tests {
             timeout_ms: 5_000,
             cursor: None,
         };
-        let request = build_request(&query).unwrap();
+        let request = build_request(&query, "test-sc").unwrap();
         let body = String::from_utf8(request.body.unwrap()).unwrap();
         assert!(body.contains("query=privacy+search"));
         assert!(body.contains("page=3"));
         assert!(body.contains("with_date=m"));
+        assert!(body.contains("sc=test-sc"));
+        assert!(body.contains("qadf=moderate"));
+    }
+
+    #[test]
+    fn parses_homepage_sc_and_react_results() {
+        assert_eq!(
+            extract_sc_code(br#"<form><input name="sc" value="sc-value"></form>"#).unwrap(),
+            "sc-value"
+        );
+        let html = br#"<script>React.createElement(UIStartpage.AppSerpWeb, {"render":{"presenter":{"regions":{"mainline":[{"display_type":"web-google","results":[{"title":"<b>Privacy</b> result","clickUrl":"https://example.com/privacy","description":"Private &amp; useful"}]}]}}}});</script>"#;
+        let results = parse_results(
+            html,
+            &Url::parse("https://www.startpage.com/sp/search").unwrap(),
+        )
+        .unwrap();
+        assert_eq!(results[0].title, "Privacy result");
+        assert_eq!(results[0].content, "Private & useful");
     }
 }

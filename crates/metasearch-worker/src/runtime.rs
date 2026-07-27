@@ -44,9 +44,6 @@ impl EngineSecrets for WorkerEngineSecrets<'_> {
     fn get(&self, engine_id: &str, name: &str) -> Option<String> {
         let binding = match (engine_id, name) {
             ("github", "api_key") => "GITHUB_TOKEN",
-            ("semantic-scholar", "api_key") => "SEMANTIC_SCHOLAR_API_KEY",
-            ("openalex", "api_key") => "OPENALEX_API_KEY",
-            ("wolframalpha", "app_id") => "WOLFRAM_APP_ID",
             ("exa-mcp", "api_key") => "EXA_API_KEY",
             ("crossref", "mailto") => "CROSSREF_MAILTO",
             _ => return None,

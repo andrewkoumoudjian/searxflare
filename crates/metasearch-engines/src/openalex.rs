@@ -40,17 +40,7 @@ pub static DESCRIPTOR: EngineDescriptor = EngineDescriptor {
     bot_auth_policy: BotAuthPolicy::Disabled,
 };
 
-fn build_request(
-    query: &NormalizedQuery,
-    api_key: Option<&str>,
-) -> Result<EngineRequest, EngineFailure> {
-    let api_key = api_key.ok_or_else(|| {
-        EngineFailure::new(
-            DESCRIPTOR.id,
-            FailureKind::EngineDisabled,
-            "OPENALEX_API_KEY is not configured",
-        )
-    })?;
+fn build_request(query: &NormalizedQuery) -> Result<EngineRequest, EngineFailure> {
     if query.time_range.is_some() || query.page_number() > 100 {
         return Err(EngineFailure::new(
             DESCRIPTOR.id,
@@ -65,7 +55,7 @@ fn build_request(
         .append_pair("search", &query.text)
         .append_pair("page", &query.page_number().to_string())
         .append_pair("per-page", &query.limit.to_string())
-        .append_pair("api_key", api_key)
+        .append_pair("sort", "relevance_score:desc")
         .append_pair(
             "select",
             "id,doi,title,publication_date,primary_location,authorships,cited_by_count,open_access",
@@ -176,14 +166,9 @@ impl SearchEngine for OpenAlexEngine {
         query: &NormalizedQuery,
         context: &EngineContext<'_>,
     ) -> Result<EngineOutput, EngineFailure> {
-        let api_key = context.secrets.get(DESCRIPTOR.id, "api_key");
         let response = context
             .http
-            .send(
-                &DESCRIPTOR,
-                build_request(query, api_key.as_deref())?,
-                context.deadline,
-            )
+            .send(&DESCRIPTOR, build_request(query)?, context.deadline)
             .await?;
         let results = parse_results(&response.body)?;
         Ok(EngineOutput {
@@ -208,5 +193,32 @@ mod tests {
         )
         .unwrap();
         assert_eq!(results[0].title, "A work");
+    }
+
+    #[test]
+    fn builds_public_works_request_without_api_key() {
+        use metasearch_core::{RankingStrategy, SafeSearch};
+
+        let request = build_request(&NormalizedQuery {
+            text: "machine learning".into(),
+            engines: Vec::new(),
+            categories: Vec::new(),
+            page: Some(2),
+            cursor: None,
+            limit: 10,
+            locale: None,
+            country: None,
+            safe_search: SafeSearch::Moderate,
+            time_range: None,
+            ranking: RankingStrategy::QueryAwareV1,
+            timeout_ms: 5_000,
+        })
+        .unwrap();
+        let parameters: BTreeMap<_, _> = request.url.query_pairs().into_owned().collect();
+        assert!(!parameters.contains_key("api_key"));
+        assert_eq!(
+            parameters.get("sort").map(String::as_str),
+            Some("relevance_score:desc")
+        );
     }
 }

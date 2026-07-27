@@ -1,10 +1,10 @@
 id: semantic-scholar
 display_name: Semantic Scholar
-endpoint: https://api.semanticscholar.org/graph/v1/paper/search
-method: GET
+endpoint: https://www.semanticscholar.org/api/1/search
+method: POST
 categories: [academic]
 source_kind: json
-allowed_hosts: [api.semanticscholar.org]
+allowed_hosts: [www.semanticscholar.org]
 capabilities:
   paging: true
   locale: false
@@ -17,10 +17,10 @@ limits:
   max_steps: 3
   max_redirects: 2
 versions:
-  parser: semantic-scholar-paper-search-json-v1
+  parser: semantic-scholar-web-search-json-v2
 cache:
   response_ttl_seconds: 900
   negative_ttl_seconds: 30
-state: stateless
+state: kv_snapshot
 default_enabled: true
-notes: Uses the public Semantic Scholar Academic Graph relevance search without requiring an API key. Results are capped to the provider's first 1000 relevance-ranked records, and shared unauthenticated rate limits remain an operational limitation.
+notes: Reads the current public UI version from the Semantic Scholar homepage, caches it for five minutes, and posts bounded relevance searches through the public web endpoint without an API key.

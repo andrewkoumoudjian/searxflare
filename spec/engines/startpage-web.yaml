@@ -17,10 +17,10 @@ limits:
   max_steps: 3
   max_redirects: 2
 versions:
-  parser: startpage-web-html-v1
+  parser: startpage-web-react-v2
 cache:
   response_ttl_seconds: 120
   negative_ttl_seconds: 60
 state: durable_coordinator
 default_enabled: true
-notes: Experimental fixed-host adapter guarded by ENABLE_STARTPAGE, with shared cooldown and optional Web Bot Auth signing.
+notes: Fetches and caches Startpage's public search-form sc token before posting a fixed-host query, parses the embedded React result payload, and retains shared challenge cooldown handling.

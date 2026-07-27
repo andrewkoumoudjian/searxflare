@@ -2,6 +2,8 @@ use metasearch_core::{
     BoundedResponse, Deadline, EngineDescriptor, EngineFailure, EngineHttpClient, EngineRequest,
     FailureKind,
 };
+#[cfg(any(target_arch = "wasm32", test))]
+use std::collections::BTreeMap;
 use url::Url;
 
 const CHALLENGE_SCAN_LIMIT: usize = 64 * 1024;
@@ -171,6 +173,26 @@ pub fn classify_challenge(engine_id: &str, status: u16, body: &[u8]) -> Option<E
         );
     }
     None
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+fn classify_challenge_headers(
+    engine_id: &str,
+    headers: &BTreeMap<String, String>,
+) -> Option<EngineFailure> {
+    let challenged = headers.iter().any(|(name, value)| {
+        (name.eq_ignore_ascii_case("x-amzn-waf-action")
+            || name.eq_ignore_ascii_case("cf-mitigated"))
+            && value.eq_ignore_ascii_case("challenge")
+    });
+    challenged.then(|| {
+        EngineFailure::new(
+            engine_id,
+            FailureKind::EngineChallenged,
+            "provider returned a challenge response header",
+        )
+        .with_retryable(false)
+    })
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -477,13 +499,6 @@ mod wasm {
                 let headers: BTreeMap<String, String> = response.headers().entries().collect();
 
                 if matches!(status, 301 | 302 | 303 | 307 | 308) {
-                    if redirect_count >= engine.max_redirects {
-                        return Err(EngineFailure::new(
-                            engine.id,
-                            FailureKind::EngineAccessDenied,
-                            "provider exceeded the configured redirect limit",
-                        ));
-                    }
                     let location = headers.get("location").ok_or_else(|| {
                         EngineFailure::new(
                             engine.id,
@@ -491,6 +506,24 @@ mod wasm {
                             "redirect response omitted Location",
                         )
                     })?;
+                    let lower_location = location.to_ascii_lowercase();
+                    if ["captcha", "/sorry/", "challenge"]
+                        .iter()
+                        .any(|marker| lower_location.contains(marker))
+                    {
+                        return Err(EngineFailure::new(
+                            engine.id,
+                            FailureKind::EngineChallenged,
+                            "provider redirected to a challenge page",
+                        ));
+                    }
+                    if redirect_count >= engine.max_redirects {
+                        return Err(EngineFailure::new(
+                            engine.id,
+                            FailureKind::EngineAccessDenied,
+                            "provider exceeded the configured redirect limit",
+                        ));
+                    }
                     let next = request.url.join(location).map_err(|error| {
                         EngineFailure::new(
                             engine.id,
@@ -515,6 +548,9 @@ mod wasm {
                 }
 
                 let body = read_bounded_body(engine, &mut response).await?;
+                if let Some(failure) = classify_challenge_headers(engine.id, &headers) {
+                    return Err(failure);
+                }
                 if let Some(failure) = classify_challenge(engine.id, status, &body) {
                     return Err(failure);
                 }
@@ -650,6 +686,15 @@ mod tests {
         assert_eq!(
             classify_challenge("test", 403, b"Forbidden").unwrap().kind,
             FailureKind::EngineAccessDenied
+        );
+        assert_eq!(
+            classify_challenge_headers(
+                "test",
+                &BTreeMap::from([("x-amzn-waf-action".into(), "challenge".into())])
+            )
+            .unwrap()
+            .kind,
+            FailureKind::EngineChallenged
         );
     }
 

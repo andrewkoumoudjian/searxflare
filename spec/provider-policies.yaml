@@ -7,7 +7,7 @@ providers:
   brave-news: {contract: public_frontend, auth: optional_web_bot_auth, production_default: true}
   qwant-web: {contract: public_frontend, auth: none, production_default: true}
   pubmed: {contract: public_api, auth: none, production_default: true}
-  semantic-scholar: {contract: public_api, auth: optional_api_key, production_default: true}
+  semantic-scholar: {contract: public_frontend, auth: none, production_default: true}
   crossref: {contract: public_api, auth: optional_operator_identity, production_default: true}
   github: {contract: public_api, auth: optional_api_key, production_default: true}
   mojeek-web: {contract: public_frontend, auth: none, production_default: true}
@@ -16,7 +16,6 @@ providers:
   baidu-web: {contract: public_frontend, auth: none, production_default: true}
   google-web: {contract: public_frontend, auth: optional_web_bot_auth, production_default: true}
   grokipedia: {contract: public_api, auth: none, production_default: true}
-  wolframalpha: {contract: supported_api, auth: required_api_key, production_default: true}
-  openalex: {contract: supported_api, auth: required_api_key, production_default: true}
-  exa-mcp: {contract: supported_mcp, auth: required_api_key, production_default: true}
+  openalex: {contract: supported_api, auth: none, production_default: true}
+  exa-mcp: {contract: supported_mcp, auth: optional_api_key, production_default: true}
   startpage-web: {contract: public_frontend, auth: optional_web_bot_auth, production_default: true}

@@ -16,7 +16,7 @@ pub static DESCRIPTOR: EngineDescriptor = EngineDescriptor {
     categories: &["academic"],
     source_kind: SourceKind::Json,
     maturity: EngineMaturity::Beta,
-    allowed_hosts: &["api.semanticscholar.org"],
+    allowed_hosts: &["www.semanticscholar.org"],
     capabilities: EngineCapabilities {
         paging: true,
         locale: false,
@@ -29,10 +29,10 @@ pub static DESCRIPTOR: EngineDescriptor = EngineDescriptor {
     max_steps: DEFAULT_MAX_STEPS,
     max_redirects: DEFAULT_MAX_REDIRECTS,
     weight: 1.35,
-    parser_version: "semantic-scholar-paper-search-json-v1",
+    parser_version: "semantic-scholar-web-search-json-v2",
     default_enabled: true,
     allow_http: false,
-    state_policy: StatePolicy::Stateless,
+    state_policy: StatePolicy::KvSnapshot,
     cache_policy: CachePolicy {
         response_ttl_seconds: 900,
         negative_ttl_seconds: 30,
@@ -40,16 +40,69 @@ pub static DESCRIPTOR: EngineDescriptor = EngineDescriptor {
     bot_auth_policy: BotAuthPolicy::Disabled,
 };
 
-const FIELDS: &str = "title,abstract,url,authors,year,publicationDate,venue,externalIds,citationCount,influentialCitationCount,isOpenAccess,openAccessPdf,fieldsOfStudy,publicationTypes,journal";
+const UI_VERSION_STATE_KEY: &str = "s2-ui-version";
 
-#[cfg(test)]
-fn build_request(query: &NormalizedQuery) -> Result<EngineRequest, EngineFailure> {
-    build_request_with_token(query, None)
+fn build_home_request() -> Result<EngineRequest, EngineFailure> {
+    Ok(EngineRequest {
+        method: EngineMethod::Get,
+        url: Url::parse("https://www.semanticscholar.org").map_err(|error| {
+            EngineFailure::new(DESCRIPTOR.id, FailureKind::Internal, error.to_string())
+        })?,
+        headers: BTreeMap::from([
+            ("accept".into(), "text/html,application/xhtml+xml".into()),
+            (
+                "user-agent".into(),
+                "Searxflare/0.1 (+https://github.com/andrewkoumoudjian/searxflare)".into(),
+            ),
+        ]),
+        cookies: BTreeMap::new(),
+        body: None,
+        accepted_content_types: &["text/html", "application/xhtml+xml"],
+    })
 }
 
-fn build_request_with_token(
+fn html_attribute(fragment: &str, name: &str) -> Option<String> {
+    for quote in ['"', '\''] {
+        let marker = format!("{name}={quote}");
+        let Some(start) = fragment.find(&marker) else {
+            continue;
+        };
+        let start = start + marker.len();
+        let value = fragment[start..].split(quote).next()?.trim();
+        if !value.is_empty() && value.len() <= 128 {
+            return Some(value.into());
+        }
+    }
+    None
+}
+
+fn extract_ui_version(body: &[u8]) -> Result<String, EngineFailure> {
+    let html = String::from_utf8_lossy(body);
+    let marker = "s2-ui-version";
+    let position = html.find(marker).ok_or_else(|| {
+        EngineFailure::new(
+            DESCRIPTOR.id,
+            FailureKind::EngineParseFailed,
+            "Semantic Scholar homepage is missing s2-ui-version",
+        )
+    })?;
+    let start = html[..position].rfind("<meta").unwrap_or(position);
+    let end = html[position..]
+        .find('>')
+        .map(|offset| position + offset + 1)
+        .unwrap_or_else(|| html.len().min(position + 512));
+    html_attribute(&html[start..end], "content").ok_or_else(|| {
+        EngineFailure::new(
+            DESCRIPTOR.id,
+            FailureKind::EngineParseFailed,
+            "Semantic Scholar s2-ui-version has no content value",
+        )
+    })
+}
+
+fn build_request(
     query: &NormalizedQuery,
-    token: Option<&str>,
+    ui_version: &str,
 ) -> Result<EngineRequest, EngineFailure> {
     if query.time_range.is_some() {
         return Err(EngineFailure::new(
@@ -59,42 +112,44 @@ fn build_request_with_token(
         ));
     }
 
-    let limit = u32::from(query.limit);
-    let offset = query.page_number().saturating_sub(1).saturating_mul(limit);
-    if offset.saturating_add(limit) > 1_000 {
+    if query.page_number() > 100 {
         return Err(EngineFailure::new(
             DESCRIPTOR.id,
             FailureKind::UnsupportedCapability,
-            "Semantic Scholar relevance search exposes at most 1,000 results",
+            "Semantic Scholar relevance search exposes at most 100 pages",
         ));
     }
 
-    let mut url =
-        Url::parse("https://api.semanticscholar.org/graph/v1/paper/search").map_err(|error| {
-            EngineFailure::new(DESCRIPTOR.id, FailureKind::Internal, error.to_string())
-        })?;
-    url.query_pairs_mut()
-        .append_pair("query", &query.text.replace('-', " "))
-        .append_pair("offset", &offset.to_string())
-        .append_pair("limit", &limit.to_string())
-        .append_pair("fields", FIELDS);
-
-    let mut headers = BTreeMap::from([
-        ("accept".into(), "application/json".into()),
-        (
-            "user-agent".into(),
-            "Searxflare/0.1 (+https://github.com/andrewkoumoudjian/searxflare)".into(),
-        ),
-    ]);
-    if let Some(token) = token {
-        headers.insert("x-api-key".into(), token.into());
-    }
+    let url = Url::parse("https://www.semanticscholar.org/api/1/search").map_err(|error| {
+        EngineFailure::new(DESCRIPTOR.id, FailureKind::Internal, error.to_string())
+    })?;
+    let body = serde_json::to_vec(&json!({
+        "queryString": query.text,
+        "page": query.page_number(),
+        "pageSize": query.limit,
+        "sort": "relevance",
+        "getQuerySuggestions": false,
+        "authors": [],
+        "coAuthors": [],
+        "venues": [],
+        "performTitleMatch": true
+    }))
+    .map_err(|error| EngineFailure::new(DESCRIPTOR.id, FailureKind::Internal, error.to_string()))?;
     Ok(EngineRequest {
-        method: EngineMethod::Get,
+        method: EngineMethod::Post,
         url,
-        headers,
+        headers: BTreeMap::from([
+            ("accept".into(), "application/json".into()),
+            ("content-type".into(), "application/json".into()),
+            ("x-s2-client".into(), "webapp-browser".into()),
+            ("x-s2-ui-version".into(), ui_version.into()),
+            (
+                "user-agent".into(),
+                "Searxflare/0.1 (+https://github.com/andrewkoumoudjian/searxflare)".into(),
+            ),
+        ]),
         cookies: BTreeMap::new(),
-        body: None,
+        body: Some(body),
         accepted_content_types: &["application/json", "text/json"],
     })
 }
@@ -121,7 +176,15 @@ fn authors(item: &Value) -> Vec<String> {
         .and_then(Value::as_array)
         .into_iter()
         .flatten()
-        .filter_map(|author| author.get("name").and_then(Value::as_str))
+        .filter_map(|author| {
+            author.get("name").and_then(Value::as_str).or_else(|| {
+                author
+                    .as_array()
+                    .and_then(|parts| parts.first())
+                    .and_then(|author| author.get("name"))
+                    .and_then(Value::as_str)
+            })
+        })
         .map(str::trim)
         .filter(|name| !name.is_empty())
         .map(str::to_owned)
@@ -130,13 +193,21 @@ fn authors(item: &Value) -> Vec<String> {
 
 fn result_url(item: &Value) -> Option<String> {
     let direct = item
-        .get("url")
+        .pointer("/primaryPaperLink/url")
         .and_then(Value::as_str)
+        .or_else(|| item.get("url").and_then(Value::as_str))
+        .or_else(|| {
+            item.get("links")
+                .and_then(Value::as_array)
+                .and_then(|links| links.first())
+                .and_then(Value::as_str)
+        })
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .map(str::to_owned);
     let candidate = direct.or_else(|| {
         item.get("paperId")
+            .or_else(|| item.get("id"))
             .and_then(Value::as_str)
             .map(str::trim)
             .filter(|value| !value.is_empty())
@@ -156,22 +227,34 @@ fn parse_results(body: &[u8]) -> Result<Vec<ProviderResult>, EngineFailure> {
             error.to_string(),
         )
     })?;
-    if root.get("error").is_some() || root.get("message").is_some() && root.get("data").is_none() {
+    if root.get("error").is_some()
+        || root.get("message").is_some()
+            && root.get("data").is_none()
+            && root.get("results").is_none()
+    {
         return Err(classify_api_error(&root));
     }
-    let items = root.get("data").and_then(Value::as_array).ok_or_else(|| {
-        EngineFailure::new(
-            DESCRIPTOR.id,
-            FailureKind::EngineParseFailed,
-            "Semantic Scholar response is missing data",
-        )
-    })?;
+    let items = root
+        .get("data")
+        .or_else(|| root.get("results"))
+        .and_then(Value::as_array)
+        .ok_or_else(|| {
+            EngineFailure::new(
+                DESCRIPTOR.id,
+                FailureKind::EngineParseFailed,
+                "Semantic Scholar response is missing data or results",
+            )
+        })?;
 
     let mut results = Vec::new();
     for item in items {
         let title = item
             .get("title")
-            .and_then(Value::as_str)
+            .and_then(|title| {
+                title
+                    .as_str()
+                    .or_else(|| title.get("text").and_then(Value::as_str))
+            })
             .map(str::trim)
             .filter(|value| !value.is_empty());
         let Some(title) = title else {
@@ -209,12 +292,14 @@ fn parse_results(body: &[u8]) -> Result<Vec<ProviderResult>, EngineFailure> {
             content: item
                 .get("abstract")
                 .and_then(Value::as_str)
+                .or_else(|| item.pointer("/paperAbstract/text").and_then(Value::as_str))
                 .unwrap_or_default()
                 .trim()
                 .into(),
             published_at: item
-                .get("publicationDate")
+                .get("pubDate")
                 .and_then(Value::as_str)
+                .or_else(|| item.get("publicationDate").and_then(Value::as_str))
                 .map(str::trim)
                 .filter(|value| !value.is_empty())
                 .map(str::to_owned)
@@ -245,23 +330,55 @@ impl SearchEngine for SemanticScholarEngine {
         query: &NormalizedQuery,
         context: &EngineContext<'_>,
     ) -> Result<EngineOutput, EngineFailure> {
-        let token = context.secrets.get(DESCRIPTOR.id, "api_key");
+        let mut upstream_requests = 0u8;
+        let mut response_bytes = 0usize;
+        let mut redirect_count = 0u8;
+        let ui_version = if let Some(value) = context
+            .state
+            .get(DESCRIPTOR.id, UI_VERSION_STATE_KEY)
+            .await?
+            .and_then(|value| String::from_utf8(value).ok())
+        {
+            value
+        } else {
+            let homepage = context
+                .http
+                .send(&DESCRIPTOR, build_home_request()?, context.deadline)
+                .await?;
+            upstream_requests = upstream_requests.saturating_add(1);
+            response_bytes = response_bytes.saturating_add(homepage.body.len());
+            redirect_count = redirect_count.saturating_add(homepage.redirect_count);
+            let value = extract_ui_version(&homepage.body)?;
+            context
+                .state
+                .put(
+                    DESCRIPTOR.id,
+                    UI_VERSION_STATE_KEY,
+                    value.as_bytes(),
+                    Some(300),
+                )
+                .await?;
+            value
+        };
         let response = context
             .http
             .send(
                 &DESCRIPTOR,
-                build_request_with_token(query, token.as_deref())?,
+                build_request(query, &ui_version)?,
                 context.deadline,
             )
             .await?;
+        upstream_requests = upstream_requests.saturating_add(1);
+        response_bytes = response_bytes.saturating_add(response.body.len());
+        redirect_count = redirect_count.saturating_add(response.redirect_count);
         let results = parse_results(&response.body)?;
         Ok(EngineOutput {
             results,
             next_cursor: None,
-            upstream_requests: 1,
-            response_bytes: response.body.len(),
+            upstream_requests,
+            response_bytes,
             parse_ms: 0,
-            redirect_count: response.redirect_count,
+            redirect_count,
         })
     }
 }
@@ -290,17 +407,15 @@ mod tests {
 
     #[test]
     fn builds_relevance_search_request() {
-        let request = build_request(&query()).unwrap();
-        let parameters: BTreeMap<_, _> = request.url.query_pairs().into_owned().collect();
+        let request = build_request(&query(), "ui-version").unwrap();
         assert_eq!(
-            parameters.get("query").map(String::as_str),
-            Some("cloudflare rust")
+            request.headers.get("x-s2-ui-version").map(String::as_str),
+            Some("ui-version")
         );
-        assert_eq!(parameters.get("offset").map(String::as_str), Some("10"));
-        assert_eq!(parameters.get("limit").map(String::as_str), Some("10"));
-        assert!(parameters
-            .get("fields")
-            .is_some_and(|value| value.contains("citationCount")));
+        let body: Value = serde_json::from_slice(request.body.as_deref().unwrap()).unwrap();
+        assert_eq!(body["queryString"], "cloudflare-rust");
+        assert_eq!(body["page"], 2);
+        assert_eq!(body["pageSize"], 10);
     }
 
     #[test]
@@ -308,14 +423,14 @@ mod tests {
         let mut range_query = query();
         range_query.time_range = Some(TimeRange::Day);
         assert_eq!(
-            build_request(&range_query).unwrap_err().kind,
+            build_request(&range_query, "ui-version").unwrap_err().kind,
             FailureKind::UnsupportedCapability
         );
 
         let mut page_query = query();
         page_query.page = Some(101);
         assert_eq!(
-            build_request(&page_query).unwrap_err().kind,
+            build_request(&page_query, "ui-version").unwrap_err().kind,
             FailureKind::UnsupportedCapability
         );
     }
@@ -348,5 +463,22 @@ mod tests {
             "../../../fixtures/engines/semantic-scholar/changed-schema.json"
         ))
         .is_err());
+    }
+
+    #[test]
+    fn extracts_ui_version_and_parses_public_web_results() {
+        assert_eq!(
+            extract_ui_version(
+                br#"<html><head><meta name="s2-ui-version" content="abc123"></head></html>"#
+            )
+            .unwrap(),
+            "abc123"
+        );
+        let results = parse_results(
+            br#"{"results":[{"id":"paper-id","title":{"text":"Public web result"},"paperAbstract":{"text":"Abstract"},"pubDate":"2026-07-27","authors":[[{"name":"Ada Example"}]]}]}"#,
+        )
+        .unwrap();
+        assert_eq!(results[0].title, "Public web result");
+        assert_eq!(results[0].published_at.as_deref(), Some("2026-07-27"));
     }
 }

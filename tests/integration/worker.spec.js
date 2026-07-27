@@ -1,7 +1,10 @@
 import { env, exports } from "cloudflare:workers";
 import { createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import WorkerEntrypoint from "../../crates/metasearch-worker/worker/facade.mjs";
+import WorkerEntrypoint, {
+  aiChunkToResult,
+  mergeRankedResults,
+} from "../../crates/metasearch-worker/worker/facade.mjs";
 
 const AUTH = { authorization: "Bearer test-api-key" };
 
@@ -9,14 +12,15 @@ const ARXIV = `<?xml version="1.0" encoding="UTF-8"?>
 <feed xmlns="http://www.w3.org/2005/Atom" xmlns:arxiv="http://arxiv.org/schemas/atom">
   <entry><id>https://arxiv.org/abs/1234.5678v1</id><title>Cloudflare Rust</title><summary>Academic result.</summary><published>2026-01-02T03:04:05Z</published><author><name>Ada Example</name></author><link title="pdf" href="https://arxiv.org/pdf/1234.5678v1" type="application/pdf" /><category term="cs.IR" /></entry>
 </feed>`;
-const WIKIPEDIA = JSON.stringify({ batchcomplete: true, query: { pages: [{ pageid: 42, ns: 0, title: "Cloudflare", extract: "Reference result.", fullurl: "https://en.wikipedia.org/wiki/Cloudflare" }] } });
-const EMPTY_WIKIPEDIA = JSON.stringify({ batchcomplete: true });
+const WIKIPEDIA = JSON.stringify({ type: "standard", title: "Cloudflare", displaytitle: "<b>Cloudflare</b>", extract: "Reference result.", content_urls: { desktop: { page: "https://en.wikipedia.org/wiki/Cloudflare" } } });
+const EMPTY_WIKIPEDIA = JSON.stringify({});
 const DUCKDUCKGO = `<!doctype html><html><body><div id="links"><div class="web-result"><h2><a href="https://duckduckgo.com/l/?uddg=https%3A%2F%2Fexample.com%2Fcloudflare">Example result</a></h2><a class="result__snippet">Web result.</a></div></div></body></html>`;
 const BRAVE = `<!doctype html><html><body><div class="snippet" data-type="web"><a class="l1" href="https://example.com/brave"><div class="title search-snippet-title">Brave result</div></a><div class="content">Brave web result.</div></div></body></html>`;
 const QWANT = JSON.stringify({ status: "success", data: { result: { items: { mainline: [{ type: "web", items: [{ title: "Qwant result", url: "https://example.com/qwant", desc: "Qwant web result.", source: "example.com" }] }] } } } });
 const PUBMED_SEARCH = JSON.stringify({ esearchresult: { idlist: ["12345678"] } });
 const PUBMED_SUMMARY = JSON.stringify({ result: { uids: ["12345678"], "12345678": { title: "Food safety and Worker systems", sortpubdate: "2026/06/15 00:00", source: "J Edge Med", fulljournalname: "Journal of Edge Medicine", authors: [{ name: "Ada Example" }], pubtype: ["Journal Article"], articleids: [{ idtype: "doi", value: "10.1234/pubmed.example" }] } } });
-const SEMANTIC_SCHOLAR = JSON.stringify({ total: 1, offset: 0, data: [{ paperId: "abcdef123456", url: "https://www.semanticscholar.org/paper/abcdef123456", title: "Semantic Scholar result", abstract: "Academic graph result.", publicationDate: "2026-07-02", authors: [{ authorId: "1", name: "Grace Researcher" }], externalIds: { DOI: "10.1234/semantic.example" }, citationCount: 8 }] });
+const SEMANTIC_HOME = '<!doctype html><html><head><meta name="s2-ui-version" content="test-ui-version"></head></html>';
+const SEMANTIC_SCHOLAR = JSON.stringify({ results: [{ id: "abcdef123456", title: { text: "Semantic Scholar result" }, paperAbstract: { text: "Academic web result." }, pubDate: "2026-07-02", authors: [[{ name: "Grace Researcher" }]] }] });
 const CROSSREF = JSON.stringify({ status: "ok", message: { items: [{ DOI: "10.1234/crossref.example", URL: "https://doi.org/10.1234/crossref.example", title: ["Crossref result"], abstract: "<jats:p>Crossref academic result.</jats:p>", author: [{ given: "Katherine", family: "Example" }], published: { "date-parts": [[2026, 7, 1]] }, "container-title": ["Journal of Edge Research"] }] } });
 const GITHUB = JSON.stringify({ total_count: 1, incomplete_results: false, items: [{ id: 123456, full_name: "cloudflare/workers-rs", html_url: "https://github.com/cloudflare/workers-rs", description: "Write Cloudflare Workers in Rust via WebAssembly.", language: "Rust", stargazers_count: 5000, forks_count: 400, open_issues_count: 80, topics: ["cloudflare-workers", "rust", "wasm"], updated_at: "2026-07-20T12:00:00Z", clone_url: "https://github.com/cloudflare/workers-rs.git", default_branch: "main", owner: { login: "cloudflare", avatar_url: "https://avatars.githubusercontent.com/u/314135" }, license: { spdx_id: "Apache-2.0" } }] });
 const MOJEEK = `<!doctype html><html><body><ul class="results-standard"><li><h2><a href="https://example.com/mojeek">Mojeek result</a></h2><a class="ob" href="https://example.com/mojeek">example.com/mojeek</a><p class="s">Independent web search result.</p></li></ul></body></html>`;
@@ -25,8 +29,12 @@ const YANDEX = `<!doctype html><html><body><li class="serp-item"><h2><a href="ht
 const BAIDU = `<!doctype html><html><body><div class="result c-container"><h3><a href="https://www.baidu.com/link?url=example">Baidu result</a></h3><div class="c-abstract">Baidu web result.</div></div></body></html>`;
 const GOOGLE = `<!doctype html><html><body><div class="MjjYud"><a href="https://www.google.com/url?q=https%3A%2F%2Fexample.com%2Fgoogle&sa=U"><h3>Google result</h3></a><div class="VwiC3b">Google web result.</div></div></body></html>`;
 const GROKIPEDIA = JSON.stringify({ results: [{ id: "gp-1", title: "Cloudflare", slug: "cloudflare", snippet: "Reference result." }] });
+const OPENALEX = JSON.stringify({ results: [{ id: "https://openalex.org/W1", doi: "https://doi.org/10.1/example", title: "OpenAlex result", publication_date: "2026-07-01", primary_location: {}, authorships: [], cited_by_count: 3, open_access: { is_oa: true } }] });
+const STARTPAGE_HOME = '<!doctype html><html><form id="search"><input name="sc" value="test-sc"></form></html>';
+const STARTPAGE = '<!doctype html><script>React.createElement(UIStartpage.AppSerpWeb, {"render":{"presenter":{"regions":{"mainline":[{"display_type":"web-google","results":[{"title":"Startpage result","clickUrl":"https://example.com/startpage","description":"Private web result."}]}]}}}});</script>';
 
 function mockProviders({ duckFailure = false, delayArxiv = false, emptyWikipedia = false } = {}) {
+  const semanticScholarBodies = [];
   const mock = vi.fn(async (input, init) => {
     const request = input instanceof Request ? input : new Request(input, init);
     const url = new URL(request.url);
@@ -42,7 +50,13 @@ function mockProviders({ duckFailure = false, delayArxiv = false, emptyWikipedia
     if (url.hostname === "search.brave.com") return new Response(BRAVE, { status: 200, headers: { "content-type": "text/html; charset=UTF-8" } });
     if (url.hostname === "api.qwant.com") return new Response(QWANT, { status: 200, headers: { "content-type": "application/json" } });
     if (url.hostname === "eutils.ncbi.nlm.nih.gov") return new Response(url.pathname.endsWith("/esearch.fcgi") ? PUBMED_SEARCH : PUBMED_SUMMARY, { status: 200, headers: { "content-type": "application/json" } });
-    if (url.hostname === "api.semanticscholar.org") return new Response(SEMANTIC_SCHOLAR, { status: 200, headers: { "content-type": "application/json" } });
+    if (url.hostname === "www.semanticscholar.org") {
+      if (url.pathname === "/api/1/search") semanticScholarBodies.push(await request.clone().json());
+      return new Response(
+        url.pathname === "/" ? SEMANTIC_HOME : SEMANTIC_SCHOLAR,
+        { status: 200, headers: { "content-type": url.pathname === "/" ? "text/html" : "application/json" } },
+      );
+    }
     if (url.hostname === "api.crossref.org") return new Response(CROSSREF, { status: 200, headers: { "content-type": "application/json" } });
     if (url.hostname === "api.github.com") return new Response(GITHUB, { status: 200, headers: { "content-type": "application/json; charset=utf-8" } });
     if (url.hostname === "www.mojeek.com") return new Response(MOJEEK, { status: 200, headers: { "content-type": "text/html; charset=UTF-8" } });
@@ -50,13 +64,25 @@ function mockProviders({ duckFailure = false, delayArxiv = false, emptyWikipedia
     if (url.hostname === "yandex.com" || url.hostname === "www.yandex.com") return new Response(YANDEX, { status: 200, headers: { "content-type": "text/html; charset=UTF-8" } });
     if (url.hostname === "www.baidu.com") return new Response(BAIDU, { status: 200, headers: { "content-type": "text/html; charset=UTF-8" } });
     if (url.hostname === "www.google.com") return new Response(GOOGLE, { status: 200, headers: { "content-type": "text/html; charset=UTF-8" } });
-    if (url.hostname === "api.x.ai") return new Response(GROKIPEDIA, { status: 200, headers: { "content-type": "application/json" } });
+    if (url.hostname === "grokipedia.com") return new Response(GROKIPEDIA, { status: 200, headers: { "content-type": "application/json" } });
+    if (url.hostname === "api.openalex.org") return new Response(OPENALEX, { status: 200, headers: { "content-type": "application/json" } });
+    if (url.hostname === "mcp.exa.ai") {
+      const body = JSON.parse(await request.text());
+      if (body.method === "initialize") return new Response(`event: message\ndata: ${JSON.stringify({ jsonrpc: "2.0", id: 1, result: { protocolVersion: "2025-06-18" } })}\n\n`, { status: 200, headers: { "content-type": "text/event-stream", "mcp-session-id": "test-session" } });
+      if (body.method === "notifications/initialized") return new Response("", { status: 202 });
+      return new Response(`event: message\ndata: ${JSON.stringify({ jsonrpc: "2.0", id: 2, result: { content: [{ type: "text", text: JSON.stringify({ results: [{ title: "Exa result", url: "https://example.com/exa", summary: "Hosted MCP result." }] }) }] } })}\n\n`, { status: 200, headers: { "content-type": "text/event-stream" } });
+    }
+    if (url.hostname === "www.startpage.com") return new Response(
+      url.pathname === "/" ? STARTPAGE_HOME : STARTPAGE,
+      { status: 200, headers: { "content-type": "text/html; charset=UTF-8" } },
+    );
     if (url.hostname === "example.com") return new Response(
       "<!doctype html><html><head><title>Crawled result</title></head><body><main>Cloudflare crawl index content.</main><a href=\"https://example.com/discovered\">Next page</a></body></html>",
       { status: 200, headers: { "content-type": "text/html; charset=UTF-8" } },
     );
     throw new Error(`unexpected outbound request: ${request.url}`);
   });
+  mock.semanticScholarBodies = semanticScholarBodies;
   vi.stubGlobal("fetch", mock);
   return mock;
 }
@@ -95,11 +121,8 @@ describe("Worker routes", () => {
     expect(response.status).toBe(200);
     const body = await response.json();
     expect(body.results.length).toBeGreaterThan(0);
-    expect(body.resolved_engines).toHaveLength(20);
-    const semanticScholarRequest = mock.mock.calls
-      .map(([input, init]) => input instanceof Request ? input : new Request(input, init))
-      .find((request) => new URL(request.url).hostname === "api.semanticscholar.org");
-    expect(new URL(semanticScholarRequest.url).searchParams.get("limit")).toBe("20");
+    expect(body.resolved_engines).toHaveLength(19);
+    expect(mock.semanticScholarBodies).toContainEqual(expect.objectContaining({ pageSize: 20 }));
   });
 
   it("rejects REST result limits below ten", async () => {
@@ -154,7 +177,7 @@ describe("Worker routes", () => {
     expect(response.status).toBe(200);
     const body = await response.json();
     expect(body.engines.map((engine) => engine.id)).toEqual([
-      "arxiv", "wikipedia", "duckduckgo-html", "brave-web", "brave-news", "qwant-web", "pubmed", "semantic-scholar", "crossref", "github", "mojeek-web", "yahoo-web", "yandex-web", "baidu-web", "google-web", "grokipedia", "wolframalpha", "openalex", "exa-mcp", "startpage-web"
+      "arxiv", "wikipedia", "duckduckgo-html", "brave-web", "brave-news", "qwant-web", "pubmed", "semantic-scholar", "crossref", "github", "mojeek-web", "yahoo-web", "yandex-web", "baidu-web", "google-web", "grokipedia", "openalex", "exa-mcp", "startpage-web"
     ]);
     expect(body.engines.every((engine) => engine.default_enabled)).toBe(true);
   });
@@ -176,6 +199,44 @@ describe("Worker routes", () => {
     expect(body.engines.some((engine) => engine.failure_kind === "ENGINE_CHALLENGED")).toBe(true);
     expect(body.engines.map((engine) => engine.engine_id)).toContain("qwant-web");
     expect(body.results.every((result) => Object.keys(result.provider_metadata).length >= 1)).toBe(true);
+  });
+
+  it("merges AI Search chunks, deduplicates URLs, and publishes final score order", () => {
+    const provider = {
+      url: "https://example.com/workers",
+      canonical_url: "https://example.com/workers",
+      title: "Unrelated provider result",
+      content: "",
+      engines: ["brave-web"],
+      positions: { "brave-web": 1 },
+      provider_metadata: { "brave-web": {} },
+      metadata: {},
+      score: 99,
+    };
+    const duplicate = aiChunkToResult({
+      score: 0.8,
+      text: "# Cloudflare Workers Rust\nRelevant indexed content.",
+      item: { key: "documents/one.md", metadata: { url: provider.url } },
+      scoring_details: { fusion_method: "rrf" },
+    }, 1);
+    const indexed = aiChunkToResult({
+      score: 0.7,
+      text: "# Cloudflare Workers Rust Guide\nCloudflare Workers Rust reference.",
+      item: { key: "documents/two.md", metadata: { url: "https://example.com/rust-guide" } },
+      scoring_details: { fusion_method: "rrf" },
+    }, 2);
+
+    const merged = mergeRankedResults(
+      [provider],
+      [duplicate, indexed],
+      "cloudflare workers rust",
+      "query-aware-v1",
+      10,
+    );
+    expect(merged).toHaveLength(2);
+    expect(merged[0].url).toBe("https://example.com/rust-guide");
+    expect(merged[1].engines).toEqual(["brave-web", "ai-search-crawl"]);
+    expect(merged[0].score).toBeGreaterThanOrEqual(merged[1].score);
   });
 
   it("resolves category bangs before provider execution", async () => {
@@ -251,7 +312,7 @@ describe("Worker routes", () => {
     const google = new URL(requests.find((request) => new URL(request.url).hostname === "www.google.com").url);
     expect(google.searchParams.get("start")).toBe("10");
     expect(google.searchParams.get("num")).toBe("10");
-    const grokipedia = new URL(requests.find((request) => new URL(request.url).hostname === "api.x.ai").url);
+    const grokipedia = new URL(requests.find((request) => new URL(request.url).hostname === "grokipedia.com").url);
     expect(grokipedia.searchParams.get("limit")).toBe("10");
     expect(grokipedia.searchParams.get("offset")).toBe("10");
   });
@@ -263,6 +324,19 @@ describe("Worker routes", () => {
     const body = await response.json();
     expect(body.partial).toBe(false);
     expect(body.results.flatMap((result) => result.engines)).toEqual(expect.arrayContaining(["pubmed", "semantic-scholar", "crossref"]));
+  });
+
+  it("uses OpenAlex and hosted Exa MCP without API keys", async () => {
+    const mock = mockProviders();
+    const response = await exports.default.fetch(new Request("https://example.com/v1/search?q=cloudflare&engines=openalex,exa-mcp", { headers: AUTH }));
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.partial).toBe(false);
+    expect(body.results.flatMap((result) => result.engines)).toEqual(expect.arrayContaining(["openalex", "exa-mcp"]));
+    const requests = mock.mock.calls.map(([input, init]) => input instanceof Request ? input : new Request(input, init));
+    const openalex = requests.find((request) => new URL(request.url).hostname === "api.openalex.org");
+    expect(new URL(openalex.url).searchParams.has("api_key")).toBe(false);
+    expect(requests.filter((request) => new URL(request.url).hostname === "mcp.exa.ai").every((request) => !request.headers.has("x-api-key"))).toBe(true);
   });
 
   it("keeps an empty successful engine as a partial response during shared cooldown", async () => {
@@ -309,7 +383,7 @@ describe("Worker routes", () => {
     expect((await second.json()).cached).toBe(true);
     const wikipediaSearchCalls = mock.mock.calls
       .map(([input, init]) => input instanceof Request ? input : new Request(input, init))
-      .filter((request) => new URL(request.url).pathname === "/w/api.php");
+      .filter((request) => new URL(request.url).pathname.startsWith("/api/rest_v1/page/summary/"));
     expect(wikipediaSearchCalls).toHaveLength(1);
     await waitOnExecutionContext(secondCtx);
   });

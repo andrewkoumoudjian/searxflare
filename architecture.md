@@ -551,7 +551,6 @@ metasearch/
 │       ├── src/duckduckgo_html.rs
 │       ├── src/duckduckgo_web.rs
 │       ├── src/qwant.rs
-│       ├── src/wolframalpha.rs
 │       ├── src/startpage.rs
 │       └── src/google.rs
 │
@@ -576,7 +575,6 @@ metasearch/
 │       ├── duckduckgo-html.yaml
 │       ├── duckduckgo-web.yaml
 │       ├── qwant.yaml
-│       ├── wolframalpha.yaml
 │       ├── startpage.yaml
 │       └── google.yaml
 │

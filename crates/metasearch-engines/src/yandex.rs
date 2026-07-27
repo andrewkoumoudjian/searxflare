@@ -78,11 +78,15 @@ fn build_request(query: &NormalizedQuery) -> Result<EngineRequest, EngineFailure
         ));
     }
 
-    let mut url = Url::parse("https://yandex.com/search/").map_err(|error| {
+    let mut url = Url::parse("https://yandex.com/search/site/").map_err(|error| {
         EngineFailure::new(DESCRIPTOR.id, FailureKind::Internal, error.to_string())
     })?;
     url.query_pairs_mut()
+        .append_pair("tmpl_version", "releases")
         .append_pair("text", &query.text)
+        .append_pair("web", "1")
+        .append_pair("frame", "1")
+        .append_pair("searchid", "3131712")
         .append_pair("p", &page.saturating_sub(1).to_string())
         .append_pair("lang", &locale_language(query));
 

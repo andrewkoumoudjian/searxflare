@@ -1,6 +1,6 @@
 id: yandex-web
 display_name: Yandex Web
-endpoint: https://yandex.com/search/
+endpoint: https://yandex.com/search/site/
 method: GET
 categories: [general]
 source_kind: html
@@ -23,4 +23,4 @@ cache:
   negative_ttl_seconds: 30
 state: stateless
 default_enabled: true
-notes: Uses the public HTML frontend with fixed hosts, zero-based bounded paging, language selection, streaming lol-html parsing, and explicit changed-layout detection. Default-disabled because challenge behavior from Cloudflare egress is not yet validated.
+notes: Uses Yandex's framed public site-search endpoint with fixed hosts, zero-based bounded paging, language selection, streaming lol-html parsing, and explicit changed-layout detection.

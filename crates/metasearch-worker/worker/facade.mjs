@@ -399,7 +399,7 @@ function lexicalScore(result, query) {
     + 0.05 * Number(result.metadata?.ai_search_score || 0);
 }
 
-function mergeRankedResults(providerResults, aiResults, query, ranking, limit) {
+export function mergeRankedResults(providerResults, aiResults, query, ranking, limit) {
   const merged = new Map();
   const add = (result, rank, source) => {
     const key = result.canonical_url || result.url;
@@ -428,19 +428,20 @@ function mergeRankedResults(providerResults, aiResults, query, ranking, limit) {
   aiResults.forEach((result, index) => add(result, index + 1, "index"));
 
   const entries = [...merged.values()];
+  for (const entry of entries) {
+    entry.finalScore = entry.fusionScore;
+    if (ranking === "query-aware-v1") entry.finalScore += lexicalScore(entry.result, query);
+    entry.result.score = entry.finalScore;
+  }
   entries.sort((left, right) => {
-    if (ranking === "query-aware-v1") {
-      const relevance = lexicalScore(right.result, query) - lexicalScore(left.result, query);
-      if (relevance) return relevance;
-    }
-    const fusion = right.fusionScore - left.fusionScore;
-    if (fusion) return fusion;
+    const score = right.finalScore - left.finalScore;
+    if (score) return score;
     return left.providerRank - right.providerRank;
   });
   return entries.slice(0, limit).map(entry => entry.result);
 }
 
-function aiChunkToResult(chunk, position) {
+export function aiChunkToResult(chunk, position) {
   const metadata = chunk.item?.metadata || {};
   const text = String(chunk.text || "");
   const frontmatterUrl = text.match(/^url:\s*["']?([^"'\n]+)["']?/m)?.[1];

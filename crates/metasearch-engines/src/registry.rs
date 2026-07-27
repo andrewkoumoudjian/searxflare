@@ -4,8 +4,7 @@ use crate::{
     github::GitHubEngine, google::GoogleEngine, grokipedia::GrokipediaEngine, mojeek::MojeekEngine,
     openalex::OpenAlexEngine, pubmed::PubMedEngine, qwant::QwantEngine,
     semantic_scholar::SemanticScholarEngine, startpage::StartpageEngine,
-    wikipedia::WikipediaEngine, wolframalpha::WolframAlphaEngine, yahoo::YahooEngine,
-    yandex::YandexEngine,
+    wikipedia::WikipediaEngine, yahoo::YahooEngine, yandex::YandexEngine,
 };
 use metasearch_core::{
     EngineContext, EngineDescriptor, EngineFailure, EngineOutput, NormalizedQuery, SearchEngine,
@@ -29,7 +28,6 @@ pub enum RegisteredEngine {
     Baidu,
     Google,
     Grokipedia,
-    WolframAlpha,
     OpenAlex,
     ExaMcp,
     Startpage,
@@ -55,7 +53,6 @@ impl SearchEngine for RegisteredEngine {
             Self::Baidu => BaiduEngine.descriptor(),
             Self::Google => GoogleEngine.descriptor(),
             Self::Grokipedia => GrokipediaEngine.descriptor(),
-            Self::WolframAlpha => WolframAlphaEngine.descriptor(),
             Self::OpenAlex => OpenAlexEngine.descriptor(),
             Self::ExaMcp => ExaMcpEngine.descriptor(),
             Self::Startpage => StartpageEngine.descriptor(),
@@ -84,7 +81,6 @@ impl SearchEngine for RegisteredEngine {
             Self::Baidu => BaiduEngine.search(query, context).await,
             Self::Google => GoogleEngine.search(query, context).await,
             Self::Grokipedia => GrokipediaEngine.search(query, context).await,
-            Self::WolframAlpha => WolframAlphaEngine.search(query, context).await,
             Self::OpenAlex => OpenAlexEngine.search(query, context).await,
             Self::ExaMcp => ExaMcpEngine.search(query, context).await,
             Self::Startpage => StartpageEngine.search(query, context).await,
@@ -92,7 +88,7 @@ impl SearchEngine for RegisteredEngine {
     }
 }
 
-static REGISTRY: [RegisteredEngine; 20] = [
+static REGISTRY: [RegisteredEngine; 19] = [
     RegisteredEngine::Arxiv,
     RegisteredEngine::Wikipedia,
     RegisteredEngine::DuckDuckGoHtml,
@@ -109,7 +105,6 @@ static REGISTRY: [RegisteredEngine; 20] = [
     RegisteredEngine::Baidu,
     RegisteredEngine::Google,
     RegisteredEngine::Grokipedia,
-    RegisteredEngine::WolframAlpha,
     RegisteredEngine::OpenAlex,
     RegisteredEngine::ExaMcp,
     RegisteredEngine::Startpage,

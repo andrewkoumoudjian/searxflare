@@ -142,14 +142,6 @@ const BANG_REGISTRY: &[BangSpec] = &[
         target: BangTarget::Engine("github"),
     },
     BangSpec {
-        alias: "wolfram",
-        target: BangTarget::Engine("wolframalpha"),
-    },
-    BangSpec {
-        alias: "wa",
-        target: BangTarget::Engine("wolframalpha"),
-    },
-    BangSpec {
         alias: "openalex",
         target: BangTarget::Engine("openalex"),
     },

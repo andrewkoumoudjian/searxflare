@@ -25,25 +25,36 @@ struct Feed {
 
 #[derive(Debug, Deserialize)]
 struct Entry {
-    title: String,
-    id: String,
-    summary: String,
-    #[serde(default)]
-    published: Option<String>,
-    #[serde(default)]
-    updated: Option<String>,
-    #[serde(rename = "author", default)]
-    authors: Vec<Author>,
-    #[serde(rename = "link", default)]
-    links: Vec<Link>,
-    #[serde(rename = "category", default)]
-    categories: Vec<Category>,
-    #[serde(default, rename = "doi", alias = "arxiv:doi")]
-    doi: Option<String>,
-    #[serde(default, rename = "journal_ref", alias = "arxiv:journal_ref")]
-    journal_reference: Option<String>,
-    #[serde(default, rename = "comment", alias = "arxiv:comment")]
-    comments: Option<String>,
+    #[serde(rename = "$value", default)]
+    children: Vec<EntryChild>,
+}
+
+#[derive(Debug, Deserialize)]
+enum EntryChild {
+    #[serde(rename = "title")]
+    Title(String),
+    #[serde(rename = "id")]
+    Id(String),
+    #[serde(rename = "summary")]
+    Summary(String),
+    #[serde(rename = "published")]
+    Published(String),
+    #[serde(rename = "updated")]
+    Updated(String),
+    #[serde(rename = "author")]
+    Author(Author),
+    #[serde(rename = "link")]
+    Link(Link),
+    #[serde(rename = "category")]
+    Category(Category),
+    #[serde(rename = "doi", alias = "arxiv:doi")]
+    Doi(String),
+    #[serde(rename = "journal_ref", alias = "arxiv:journal_ref")]
+    JournalReference(String),
+    #[serde(rename = "comment", alias = "arxiv:comment")]
+    Comment(String),
+    #[serde(other)]
+    Other,
 }
 
 #[derive(Debug, Deserialize)]
@@ -77,19 +88,51 @@ pub fn parse_arxiv_atom(xml: &[u8]) -> Result<Vec<ArxivRecord>, ParserError> {
     let mut records = Vec::with_capacity(feed.entries.len());
 
     for entry in feed.entries {
-        let title = clean(&entry.title);
-        let abstract_text = clean(&entry.summary);
-        if title.eq_ignore_ascii_case("error") || entry.id.contains("/api/errors#") {
+        let mut title = None;
+        let mut canonical_url = None;
+        let mut abstract_text = None;
+        let mut published = None;
+        let mut updated = None;
+        let mut authors = Vec::new();
+        let mut links = Vec::new();
+        let mut categories = Vec::new();
+        let mut doi = None;
+        let mut journal_reference = None;
+        let mut comments = None;
+        for child in entry.children {
+            match child {
+                EntryChild::Title(value) => title = Some(clean(&value)),
+                EntryChild::Id(value) => canonical_url = Some(value),
+                EntryChild::Summary(value) => abstract_text = Some(clean(&value)),
+                EntryChild::Published(value) => published = Some(value),
+                EntryChild::Updated(value) => updated = Some(value),
+                EntryChild::Author(value) => authors.push(clean(&value.name)),
+                EntryChild::Link(value) => links.push(value),
+                EntryChild::Category(value) => categories.push(value.term),
+                EntryChild::Doi(value) => doi = Some(clean(&value)),
+                EntryChild::JournalReference(value) => {
+                    journal_reference = Some(clean(&value));
+                }
+                EntryChild::Comment(value) => comments = Some(clean(&value)),
+                EntryChild::Other => {}
+            }
+        }
+        let title =
+            title.ok_or_else(|| ParserError::InvalidXml("arXiv entry is missing title".into()))?;
+        let canonical_url = canonical_url
+            .ok_or_else(|| ParserError::InvalidXml("arXiv entry is missing id".into()))?;
+        let abstract_text = abstract_text
+            .ok_or_else(|| ParserError::InvalidXml("arXiv entry is missing summary".into()))?;
+        if title.eq_ignore_ascii_case("error") || canonical_url.contains("/api/errors#") {
             return Err(ParserError::ProviderError(abstract_text));
         }
 
-        let published_at = entry.published.or(entry.updated).ok_or_else(|| {
+        let published_at = published.or(updated).ok_or_else(|| {
             ParserError::InvalidXml(
                 "arXiv entry is missing published and updated timestamps".into(),
             )
         })?;
-        let pdf_url = entry
-            .links
+        let pdf_url = links
             .iter()
             .find(|link| {
                 link.title.as_deref() == Some("pdf")
@@ -99,22 +142,14 @@ pub fn parse_arxiv_atom(xml: &[u8]) -> Result<Vec<ArxivRecord>, ParserError> {
 
         records.push(ArxivRecord {
             title,
-            canonical_url: entry.id,
+            canonical_url,
             abstract_text,
-            authors: entry
-                .authors
-                .into_iter()
-                .map(|author| clean(&author.name))
-                .collect(),
+            authors,
             pdf_url,
-            doi: entry.doi.map(|value| clean(&value)),
-            journal_reference: entry.journal_reference.map(|value| clean(&value)),
-            categories: entry
-                .categories
-                .into_iter()
-                .map(|category| category.term)
-                .collect(),
-            comments: entry.comments.map(|value| clean(&value)),
+            doi,
+            journal_reference,
+            categories,
+            comments,
             published_at,
         });
     }
@@ -164,6 +199,27 @@ mod tests {
         assert_eq!(
             parse_arxiv_atom(xml).unwrap_err(),
             ParserError::ProviderError("Malformed query".into())
+        );
+    }
+
+    #[test]
+    fn accepts_interleaved_repeated_link_elements() {
+        let xml = br#"<?xml version="1.0" encoding="UTF-8"?>
+        <feed xmlns="http://www.w3.org/2005/Atom">
+          <entry>
+            <id>https://arxiv.org/abs/1234.5678v1</id>
+            <title>Interleaved links</title>
+            <summary>Abstract text.</summary>
+            <published>2026-01-02T03:04:05Z</published>
+            <link href="https://arxiv.org/abs/1234.5678v1" />
+            <author><name>Ada Example</name></author>
+            <link title="pdf" href="https://arxiv.org/pdf/1234.5678v1" type="application/pdf" />
+          </entry>
+        </feed>"#;
+        let records = parse_arxiv_atom(xml).unwrap();
+        assert_eq!(
+            records[0].pdf_url.as_deref(),
+            Some("https://arxiv.org/pdf/1234.5678v1")
         );
     }
 }

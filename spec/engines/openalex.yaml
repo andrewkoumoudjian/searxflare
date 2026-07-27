@@ -23,4 +23,4 @@ cache:
   negative_ttl_seconds: 30
 state: stateless
 default_enabled: true
-notes: Uses the official Works search endpoint with OPENALEX_API_KEY supplied through the provider-scoped secret boundary.
+notes: Uses the public Works search endpoint without an API key, with bounded paging, relevance sorting and a restricted response field set.

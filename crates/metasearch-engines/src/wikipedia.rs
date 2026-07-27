@@ -1,3 +1,4 @@
+use crate::text::strip_markup;
 use metasearch_core::{
     BotAuthPolicy, CachePolicy, EngineCapabilities, EngineContext, EngineDescriptor, EngineFailure,
     EngineMaturity, EngineMethod, EngineOutput, EngineRequest, FailureKind, NormalizedQuery,
@@ -23,7 +24,7 @@ pub static DESCRIPTOR: EngineDescriptor = EngineDescriptor {
         "es.wikipedia.org",
     ],
     capabilities: EngineCapabilities {
-        paging: true,
+        paging: false,
         locale: true,
         country: false,
         safe_search: false,
@@ -34,7 +35,7 @@ pub static DESCRIPTOR: EngineDescriptor = EngineDescriptor {
     max_steps: DEFAULT_MAX_STEPS,
     max_redirects: DEFAULT_MAX_REDIRECTS,
     weight: 1.15,
-    parser_version: "wikipedia-action-json-v1",
+    parser_version: "wikipedia-rest-summary-json-v2",
     default_enabled: true,
     allow_http: false,
     state_policy: StatePolicy::Stateless,
@@ -58,33 +59,27 @@ fn language_host(locale: Option<&str>) -> &'static str {
 }
 
 fn build_request(query: &NormalizedQuery) -> Result<EngineRequest, EngineFailure> {
+    if query.page_number() > 1 {
+        return Err(EngineFailure::new(
+            DESCRIPTOR.id,
+            FailureKind::UnsupportedCapability,
+            "Wikipedia REST summaries do not support paging",
+        ));
+    }
     let host = language_host(query.locale.as_deref());
-    let page_size = u32::from(query.limit);
-    let offset = query
-        .page_number()
-        .saturating_sub(1)
-        .saturating_mul(page_size);
-    let mut url = Url::parse(&format!("https://{host}/w/api.php")).map_err(|error| {
-        EngineFailure::new(DESCRIPTOR.id, FailureKind::Internal, error.to_string())
-    })?;
-    url.query_pairs_mut()
-        .append_pair("action", "query")
-        .append_pair("generator", "search")
-        .append_pair("gsrsearch", &query.text)
-        .append_pair("gsrnamespace", "0")
-        .append_pair("gsrlimit", &page_size.to_string())
-        .append_pair("gsroffset", &offset.to_string())
-        .append_pair("prop", "extracts|info|pageimages")
-        .append_pair("exintro", "1")
-        .append_pair("explaintext", "1")
-        .append_pair("exlimit", "max")
-        .append_pair("inprop", "url")
-        .append_pair("piprop", "thumbnail")
-        .append_pair("pithumbsize", "200")
-        .append_pair("pilimit", "max")
-        .append_pair("format", "json")
-        .append_pair("formatversion", "2")
-        .append_pair("utf8", "1");
+    let mut url =
+        Url::parse(&format!("https://{host}/api/rest_v1/page/summary")).map_err(|error| {
+            EngineFailure::new(DESCRIPTOR.id, FailureKind::Internal, error.to_string())
+        })?;
+    url.path_segments_mut()
+        .map_err(|_| {
+            EngineFailure::new(
+                DESCRIPTOR.id,
+                FailureKind::Internal,
+                "Wikipedia summary URL cannot accept path segments",
+            )
+        })?
+        .push(&query.text);
 
     let agent = "searxflare/0.1 (+https://github.com/andrewkoumoudjian/searxflare)";
     Ok(EngineRequest {
@@ -139,6 +134,59 @@ fn parse_results(body: &[u8]) -> Result<Vec<ProviderResult>, EngineFailure> {
     })?;
     if let Some(failure) = classify_api_error(&root) {
         return Err(failure);
+    }
+    if root.get("content_urls").is_some() {
+        let title = root
+            .pointer("/titles/display")
+            .or_else(|| root.get("displaytitle"))
+            .or_else(|| root.get("title"))
+            .and_then(Value::as_str)
+            .map(strip_markup)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| {
+                EngineFailure::new(
+                    DESCRIPTOR.id,
+                    FailureKind::EngineParseFailed,
+                    "Wikipedia summary is missing title",
+                )
+            })?;
+        let url = root
+            .pointer("/content_urls/desktop/page")
+            .and_then(Value::as_str)
+            .filter(|value| Url::parse(value).is_ok())
+            .ok_or_else(|| {
+                EngineFailure::new(
+                    DESCRIPTOR.id,
+                    FailureKind::EngineParseFailed,
+                    "Wikipedia summary is missing its canonical page URL",
+                )
+            })?;
+        let content = root
+            .get("extract")
+            .or_else(|| root.get("description"))
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ");
+        return Ok(vec![ProviderResult {
+            url: url.into(),
+            title,
+            content,
+            published_at: root
+                .get("timestamp")
+                .and_then(Value::as_str)
+                .map(str::to_owned),
+            thumbnail: root
+                .pointer("/thumbnail/source")
+                .and_then(Value::as_str)
+                .map(str::to_owned),
+            category: "reference".into(),
+            metadata: Map::new(),
+            engine_id: DESCRIPTOR.id.into(),
+            position: 1,
+            engine_weight: DESCRIPTOR.weight,
+        }]);
     }
 
     let Some(query) = root.get("query") else {
@@ -243,7 +291,7 @@ mod tests {
             text: "cloudflare rust".into(),
             engines: Vec::new(),
             categories: Vec::new(),
-            page: Some(2),
+            page: Some(1),
             cursor: None,
             limit: 10,
             locale: Some("fr-CA".into()),
@@ -262,20 +310,13 @@ mod tests {
     }
 
     #[test]
-    fn builds_bounded_action_api_request() {
+    fn builds_rest_summary_request() {
         let request = build_request(&query()).unwrap();
-        let parameters: BTreeMap<_, _> = request.url.query_pairs().into_owned().collect();
         assert_eq!(request.url.host_str(), Some("fr.wikipedia.org"));
-        assert_eq!(request.url.path(), "/w/api.php");
         assert_eq!(
-            parameters.get("generator").map(String::as_str),
-            Some("search")
+            request.url.path(),
+            "/api/rest_v1/page/summary/cloudflare%20rust"
         );
-        assert_eq!(
-            parameters.get("gsrsearch").map(String::as_str),
-            Some("cloudflare rust")
-        );
-        assert_eq!(parameters.get("gsroffset").map(String::as_str), Some("10"));
     }
 
     #[test]
@@ -308,5 +349,15 @@ mod tests {
             FailureKind::EngineRateLimited
         );
         assert!(parse_results(br#"{"query":{"pages":{}}}"#).is_err());
+    }
+
+    #[test]
+    fn parses_rest_summary_response() {
+        let results = parse_results(
+            br#"{"type":"standard","title":"Cloudflare","displaytitle":"<b>Cloudflare</b>","extract":"Web infrastructure company.","timestamp":"2026-07-27T00:00:00Z","content_urls":{"desktop":{"page":"https://en.wikipedia.org/wiki/Cloudflare"}},"thumbnail":{"source":"https://upload.wikimedia.org/example.png"}}"#,
+        )
+        .unwrap();
+        assert_eq!(results[0].title, "Cloudflare");
+        assert_eq!(results[0].position, 1);
     }
 }

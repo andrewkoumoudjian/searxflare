@@ -1,6 +1,6 @@
 # Source Notes
 
-Reviewed: 2026-07-26
+Reviewed: 2026-07-27
 
 ## Cloudflare platform sources
 
@@ -34,6 +34,10 @@ Current files consulted:
 - `searx/engines/baidu.py`
 - `searx/engines/google.py`
 - `searx/engines/grokipedia.py`
+- `searx/engines/openalex.py`
+- `searx/engines/semantic_scholar.py`
+- `searx/engines/startpage.py`
+- `searx/engines/wikipedia.py`
 - https://docs.searxng.org/user/configured_engines.html
 
 The references were used to identify public endpoints, stable query parameters, result containers, paging conventions, locale/SafeSearch handling, tracking-link formats, provider errors and user-facing bang behavior. Searxflare does not copy SearXNG control flow or Python implementation. Its Rust adapters use the repository's own engine traits, restricted transport, bounded `lol-html` parser, failure taxonomy, caching, query-aware ranking and Worker target constraints.
@@ -51,7 +55,7 @@ The standalone request values `github`, `3.0`, and `1.0` were not mapped to Sear
 - Yandex: `https://yandex.com/search/`
 - Baidu: `https://www.baidu.com/s`
 - Google: `https://www.google.com/search`
-- Grokipedia: `https://api.x.ai/grokipedia/v1/search`
+- Grokipedia: `https://grokipedia.com/api/full-text-search`
 - Mojeek request parameters: https://www.mojeek.com/support/api/search/request_parameters.html
 - Mojeek search operators: https://www.mojeek.com/support/search-operators.html
 - Yahoo regional/language help: https://help.yahoo.com/kb/regional-language-specific-yahoo-search-results-sln6583.html
@@ -64,9 +68,9 @@ Qwant uses the smaller caller limit capped at ten and calculates the page offset
 ## Official reference, academic and code APIs
 
 - arXiv API: https://info.arxiv.org/help/api/user-manual.html
-- MediaWiki Action API: https://www.mediawiki.org/wiki/API:Action_API
+- MediaWiki REST API page summary: https://www.mediawiki.org/wiki/API:REST_API/Reference
 - NCBI E-utilities: https://www.ncbi.nlm.nih.gov/books/NBK25500/
-- Semantic Scholar Academic Graph API: https://api.semanticscholar.org/api-docs/graph
+- Semantic Scholar public search frontend: `https://www.semanticscholar.org/api/1/search`
 - Crossref REST API: https://crossref.gitlab.io/rest-api-doc/
 - GitHub repository search: https://docs.github.com/en/rest/search/search
 - GitHub API versioning: https://docs.github.com/en/rest/about-the-rest-api/api-versions
@@ -80,7 +84,7 @@ GitHub uses a fixed host, stable repository-identifying User-Agent, bounded `pag
 - Reference: https://exa.ai/docs/reference/exa-mcp
 - Remote endpoint: `https://mcp.exa.ai/mcp`
 - Transport: Streamable HTTP
-- Production authentication: `x-api-key`
+- Authentication: optional `x-api-key`; the hosted free service works without it
 
 The original public-provider slice deferred Exa because the engine abstraction
 did not expose provider-scoped secrets or an MCP lifecycle. The stateful slice
@@ -90,20 +94,21 @@ remains out of scope.
 
 ## Stateful, authenticated and experimental providers
 
-The 2026-07-27 stateful slice adds provider-scoped secret access without exposing
-the raw Worker environment to engines. GitHub and Semantic Scholar use their
-documented request headers when credentials are configured; Crossref adds the
-operator `mailto`; OpenAlex uses the official `/works?search=` endpoint and
-`api_key` parameter documented at
-https://developers.openalex.org/api-reference/authentication.
+The 2026-07-27 stateful slice adds provider-scoped optional secret access without
+exposing the raw Worker environment to engines. GitHub uses a token when one is
+configured, Crossref adds the operator `mailto`, and OpenAlex uses the public
+official `/works?search=` endpoint without requiring an API key. Semantic
+Scholar uses the same public web-search request shape as current SearXNG,
+including a provider-issued UI version marker read from its homepage.
 
-WolframAlpha uses the official Full Results API v2 query endpoint with JSON
-output and plaintext pods as documented at
-https://products.wolframalpha.com/api/documentation. Brave News and Startpage
-remain clean-room, fixed-host public-frontend adapters and are default-disabled.
+WolframAlpha is not registered because its official programmable Full Results
+API requires an App ID and current SearXNG has no keyless Wolfram engine. Brave
+News and Startpage remain clean-room, fixed-host public-frontend adapters and
+are default-disabled.
 
 Exa uses the official Streamable HTTP server at `https://mcp.exa.ai/mcp`, the
-documented `x-api-key` header, and only the documented `web_search_exa` tool:
+optional documented `x-api-key` header, and only the documented
+`web_search_exa` tool:
 https://exa.ai/docs/reference/exa-mcp. The adapter has a fixed two-request
 initialize/call lifecycle, a fixed tool name, bounded arguments and no arbitrary
 MCP method, tool, host or header surface.

@@ -27,16 +27,16 @@ The canonical system design is [`architecture.md`](architecture.md). Public cont
 
 ## Engine catalogue
 
-The compile-time catalogue contains twenty engines:
+The compile-time catalogue contains nineteen engines:
 
 - arXiv Atom
-- Wikipedia Action API JSON
+- Wikipedia REST summary JSON
 - DuckDuckGo HTML
 - Brave Web HTML
 - Brave News HTML
 - Qwant Web JSON
 - PubMed JSON
-- Semantic Scholar JSON
+- Semantic Scholar public-web JSON
 - Crossref JSON
 - GitHub REST repository search
 - Mojeek HTML
@@ -45,7 +45,6 @@ The compile-time catalogue contains twenty engines:
 - Baidu HTML
 - Google HTML
 - Grokipedia JSON
-- WolframAlpha Full Results JSON
 - OpenAlex Works JSON
 - Exa Streamable HTTP MCP
 - Startpage HTML
@@ -58,7 +57,7 @@ Qwant caps requests at its ten-result page size. Mojeek supports bounded paging,
 
 GitHub repository search is available through explicit engine selection or `!gh`. It uses the public REST repository-search endpoint with a fixed host, bounded paging, stable client identification and rate-limit classification. The standalone request values `github`, `3.0` and `1.0` were not interpreted as weights, versions or timeouts.
 
-Exa MCP uses a fixed two-request Streamable HTTP lifecycle and only invokes `web_search_exa`; its host, method, tool and arguments remain bounded. OpenAlex, WolframAlpha and Exa require their provider-scoped secrets. No header rotation or rate-limit evasion is implemented.
+Exa MCP uses a fixed Streamable HTTP lifecycle and only invokes `web_search_exa`; its host, method, tool and arguments remain bounded. OpenAlex and Exa work without provider credentials; `EXA_API_KEY` is optional and only raises the hosted MCP service's provider limits. No browser-fingerprint, cookie or header rotation is implemented.
 
 ## Query selection and ranking
 
@@ -77,7 +76,6 @@ Supported aliases include:
 - `!bd` / `!baidu`
 - `!google`
 - `!news` / `!brave-news`
-- `!wa` / `!wolfram`
 - `!openalex`
 - `!exa`
 - `!sp` / `!startpage`
