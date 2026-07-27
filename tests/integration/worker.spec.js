@@ -68,6 +68,9 @@ describe("Worker routes", () => {
     expect(html).toContain("Searxflare");
     expect(html).toContain("/assets/searxflarelogo.svg");
     expect(html).toContain("@paper-design/shaders@0.0.77");
+    expect(html).toContain("const fragmentShader=");
+    expect(html).not.toContain("shaders.ditheringFragmentShader");
+    expect(html).toContain("transform:translateX(-.35%)");
     expect(html).toContain('class="results-shell"');
     expect(html).toContain("activateResults()");
   });

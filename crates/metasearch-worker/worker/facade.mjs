@@ -1,4 +1,5 @@
 import RustWorker, { ProviderCoordinatorObject } from "../build/index.js";
+import { ditherTransitionFragmentShader } from "./dither-transition-shader.mjs";
 
 export { ProviderCoordinatorObject };
 
@@ -52,7 +53,6 @@ const HOME_HTML = `<!doctype html>
     button,input{font:inherit}
     button{-webkit-tap-highlight-color:transparent}
     .dither-backdrop{position:fixed;z-index:0;inset:0;overflow:hidden;opacity:.62;pointer-events:none;transition:opacity 360ms var(--ease-out)}
-    .dither-backdrop::before{position:absolute;inset:0;background-image:radial-gradient(circle,rgb(135 144 154 / 64%) 0 .7px,transparent .9px);background-position:center;background-size:6px 6px;mask-image:radial-gradient(ellipse 92% 92% at 64% 20%,#000 0,transparent 100%);content:"";opacity:.48}
     .dither-backdrop canvas{width:100%!important;height:100%!important;opacity:0;animation:shader-enter 700ms var(--ease-out) forwards}
     @keyframes shader-enter{to{opacity:1}}
     body.has-results .dither-backdrop{opacity:.08}
@@ -61,7 +61,7 @@ const HOME_HTML = `<!doctype html>
     .search-layout{position:relative;isolation:isolate}
     .search-layout::before{position:absolute;z-index:-1;inset:-4rem -6rem;background:rgb(var(--paper-rgb) / 28%);content:"";mask-image:radial-gradient(ellipse 100% 74% at center,rgb(0 0 0 / 42%) 0%,rgb(0 0 0 / 26%) 46%,transparent 100%);pointer-events:none}
     .brand-link{display:block;width:clamp(17rem,42vw,28rem);margin:0 auto 2.4rem;color:inherit}
-    .brand{display:block;width:100%;height:auto;clip-path:inset(1px);mix-blend-mode:multiply}
+    .brand{display:block;width:100%;height:auto;clip-path:inset(1px);mix-blend-mode:multiply;transform:translateX(-.35%)}
     .search-form{display:flex;min-height:48px;border:1px solid rgb(23 24 22 / 14%);border-radius:24px;align-items:center;padding:3px 7px 3px 17px;background:var(--surface);box-shadow:0 1px 2px rgb(23 24 22 / 5%),0 4px 18px rgb(23 24 22 / 8%);backdrop-filter:blur(16px);transition:border-color 180ms ease,box-shadow 180ms ease,background 180ms ease}
     .search-form:focus-within,.search-form:hover{border-color:rgb(23 24 22 / 20%);background:rgb(255 255 255 / 88%);box-shadow:0 1px 2px rgb(23 24 22 / 6%),0 6px 22px rgb(23 24 22 / 11%)}
     .search-input{min-width:0;border:0;outline:0;flex:1;padding:9px 4px;background:transparent;color:var(--ink);font-size:1rem;letter-spacing:-.01em;line-height:1.45}
@@ -178,22 +178,29 @@ async function initShader(){
   if(window.matchMedia("(prefers-reduced-motion: reduce)").matches||window.matchMedia("(prefers-reduced-data: reduce)").matches)return;
   try{
     const shaders=await import("https://esm.sh/@paper-design/shaders@0.0.77");
-    const mount=new shaders.ShaderMount(document.querySelector("#dither"),shaders.ditheringFragmentShader,{
+    const fragmentShader=${JSON.stringify(ditherTransitionFragmentShader)};
+    const color=value=>shaders.getShaderColorFromString(value);
+    const presets=[
+      {color:"#87909a",mask:[.64,.2,.92],shape:shaders.DitheringShapes.simplex,size:1.65,scale:.92,speed:.46,rotation:-10,offset:[.14,-.24]},
+      {color:"#059669",mask:[.72,.26,.9],shape:shaders.DitheringShapes.ripple,size:1.7,scale:.9,speed:.2,rotation:0,offset:[.3,-.24]},
+      {color:"#6fae45",mask:[.18,.46,.88],shape:shaders.DitheringShapes.dots,size:2.2,scale:1.2,speed:.32,rotation:12,offset:[-.42,0]},
+      {color:"#4267bd",mask:[.76,.64,.96],shape:shaders.DitheringShapes.sphere,size:1.9,scale:.94,speed:.63,rotation:0,offset:[.38,.28]},
+      {color:"#92724c",mask:[.32,.7,1.12],shape:shaders.DitheringShapes.wave,size:1.75,scale:.84,speed:.82,rotation:-8,offset:[-.3,.36]}
+    ];
+    const mount=new shaders.ShaderMount(document.querySelector("#dither"),fragmentShader,{
       u_colorBack:shaders.getShaderColorFromString("#f6f6f3"),
-      u_colorFront:shaders.getShaderColorFromString("#87909a"),
-      u_shape:shaders.DitheringShapes.simplex,
-      u_type:shaders.DitheringTypes.random,
-      u_pxSize:1.65,
-      u_fit:0,
-      u_scale:.92,
-      u_rotation:-10,
-      u_originX:.5,
-      u_originY:.5,
-      u_offsetX:.14,
-      u_offsetY:-.24,
-      u_worldWidth:0,
-      u_worldHeight:0
-    },undefined,.46,0,1,window.innerWidth<=700?400000:800000);
+      u_transitionStyle:1,
+      u_transitionProgress:1,
+      u_targetIndex:0,
+      u_transitionOrigin:[.64,.2],
+      "u_colorFronts[0]":presets.map(preset=>color(preset.color)),
+      "u_masks[0]":presets.map(preset=>preset.mask),
+      "u_motion[0]":presets.map(preset=>[preset.rotation,preset.speed]),
+      "u_offsets[0]":presets.map(preset=>preset.offset),
+      "u_params[0]":presets.map((preset,index)=>[preset.shape,preset.size,preset.scale,index===4?3:0]),
+      u_weights:[1,0,0,0],
+      u_dktWeight:0
+    },undefined,1,0,1,window.innerWidth<=700?400000:800000);
     window.addEventListener("pagehide",()=>mount.dispose(),{once:true});
   }catch(error){console.warn("Shader fallback active",error)}
 }
