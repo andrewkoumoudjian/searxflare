@@ -209,6 +209,43 @@ fn env_text(env: &Env, name: &str) -> Option<String> {
         .ok()
 }
 
+fn spoofed_user_agent(env: &Env) -> Option<String> {
+    let raw = env_text(env, "SPOOF_USER_AGENT")?;
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    match trimmed.to_ascii_lowercase().as_str() {
+        "claude" => Some(
+            "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; Claude-User/1.0; +mailto:support@anthropic.com)".to_owned(),
+        ),
+        "claude-user" | "claude_user" => Some("Claude-User".to_owned()),
+        "gemini" | "google" => Some("Google".to_owned()),
+        "openai" | "openai_fd" | "openai-fd" => Some("OpenAI File Downloader".to_owned()),
+        "xai" => Some(
+            "XaiImageApiFetch/1.0 (Linux; x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3".to_owned(),
+        ),
+        "xai-short" => Some("XaiImageApiFetch/1.0".to_owned()),
+        "gptbot" => Some(
+            "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; GPTBot/1.2; +https://openai.com/gptbot)".to_owned(),
+        ),
+        "perplexity" | "perplexitybot" => Some(
+            "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; PerplexityBot/1.0; +https://perplexity.ai/perplexitybot)".to_owned(),
+        ),
+        "googlebot" => {
+            Some("Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)".to_owned())
+        }
+        "mozilla" | "chrome" => Some(
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36".to_owned(),
+        ),
+        "curl" => Some("curl/8.0".to_owned()),
+        "searxflare" => {
+            Some("Searxflare/0.1 (+https://github.com/andrewkoumoudjian/searxflare)".to_owned())
+        }
+        _ => Some(trimmed.to_owned()),
+    }
+}
+
 fn bot_auth_config(env: &Env) -> Option<BotAuthConfig> {
     let private_key = env_text(env, "WEB_BOT_AUTH_PRIVATE_KEY")?;
     let key_id = env_text(env, "WEB_BOT_AUTH_KEY_ID")?;
@@ -807,7 +844,8 @@ async fn execute_search(
         }
     }
 
-    let http = WorkerFetchClient::new(bot_auth_config(&ctx.env));
+    let http = WorkerFetchClient::new(bot_auth_config(&ctx.env))
+        .with_spoofed_user_agent(spoofed_user_agent(&ctx.env));
     let noop_state = NoopEngineState;
     let kv_state = ctx
         .env

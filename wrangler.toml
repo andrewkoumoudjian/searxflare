@@ -67,3 +67,7 @@ bucket_name = "searxflare-crawl-documents"
 [[ai_search]]
 binding = "CRAWL_SEARCH"
 instance_name = "searxflare"
+
+# optional UA spoof experiment lever: claude|claude-user|gemini|google|openai|xai|gptbot|perplexity|googlebot|mozilla|curl|searxflare|<custom UA> — see docs/ua-spoof-experiment.md
+# [vars]
+# SPOOF_USER_AGENT = "claude-user"

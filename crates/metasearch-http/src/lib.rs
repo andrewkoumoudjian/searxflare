@@ -46,11 +46,39 @@ impl BotAuthConfig {
 pub struct WorkerFetchClient {
     #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
     bot_auth: Option<BotAuthConfig>,
+    spoof_user_agent: Option<String>,
 }
 
 impl WorkerFetchClient {
-    pub const fn new(bot_auth: Option<BotAuthConfig>) -> Self {
-        Self { bot_auth }
+    pub fn new(bot_auth: Option<BotAuthConfig>) -> Self {
+        Self {
+            bot_auth,
+            spoof_user_agent: None,
+        }
+    }
+
+    pub fn with_spoofed_user_agent(mut self, spoof_user_agent: Option<String>) -> Self {
+        self.spoof_user_agent = spoof_user_agent
+            .map(|value| value.trim().to_owned())
+            .filter(|value| !value.is_empty());
+        self
+    }
+
+    pub fn spoofed_user_agent(&self) -> Option<&str> {
+        self.spoof_user_agent.as_deref()
+    }
+
+    pub fn apply_spoof_to_request(&self, request: &mut metasearch_core::EngineRequest) {
+        if let Some(spoof) = self.spoof_user_agent.as_deref() {
+            request
+                .headers
+                .insert("user-agent".into(), spoof.to_owned());
+            if request.headers.contains_key("api-user-agent") {
+                request
+                    .headers
+                    .insert("api-user-agent".into(), spoof.to_owned());
+            }
+        }
     }
 }
 
@@ -348,6 +376,10 @@ mod wasm {
         Ok(())
     }
 
+    fn apply_spoofed_user_agent(client: &WorkerFetchClient, request: &mut EngineRequest) {
+        client.apply_spoof_to_request(request);
+    }
+
     fn build_request(engine_id: &str, request: &EngineRequest) -> Result<Request, EngineFailure> {
         let headers = Headers::new();
         for (name, value) in &request.headers {
@@ -492,6 +524,7 @@ mod wasm {
             let mut redirect_count = 0u8;
 
             loop {
+                apply_spoofed_user_agent(self, &mut request);
                 apply_bot_auth(self, engine, &mut request)?;
                 let outgoing = build_request(engine.id, &request)?;
                 let mut response = fetch_with_deadline(engine.id, outgoing, deadline).await?;
@@ -708,5 +741,53 @@ mod tests {
             Some("application/json"),
             &["text/html"]
         ));
+    }
+
+    #[test]
+    fn spoofed_user_agent_builder_trims_and_filters_empty() {
+        let client = WorkerFetchClient::new(None)
+            .with_spoofed_user_agent(Some(
+                "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; Claude-User/1.0; +mailto:support@anthropic.com)".into(),
+            ));
+        assert_eq!(
+            client.spoofed_user_agent(),
+            Some("Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; Claude-User/1.0; +mailto:support@anthropic.com)")
+        );
+        let empty = WorkerFetchClient::new(None).with_spoofed_user_agent(Some("   ".into()));
+        assert!(empty.spoofed_user_agent().is_none());
+        let none = WorkerFetchClient::new(None).with_spoofed_user_agent(None);
+        assert!(none.spoofed_user_agent().is_none());
+    }
+
+    #[test]
+    fn spoofed_user_agent_overrides_request_headers() {
+        use metasearch_core::{EngineMethod, EngineRequest};
+        let client = WorkerFetchClient::new(None)
+            .with_spoofed_user_agent(Some("Claude-User/1.0".into()));
+        let mut request = EngineRequest {
+            method: EngineMethod::Get,
+            url: Url::parse("https://example.com/").unwrap(),
+            headers: BTreeMap::from([
+                ("user-agent".into(), "Searxflare/0.1".into()),
+                ("api-user-agent".into(), "Searxflare/0.1".into()),
+                ("accept".into(), "text/html".into()),
+            ]),
+            cookies: BTreeMap::new(),
+            body: None,
+            accepted_content_types: &["text/html"],
+        };
+        client.apply_spoof_to_request(&mut request);
+        assert_eq!(
+            request.headers.get("user-agent").map(String::as_str),
+            Some("Claude-User/1.0")
+        );
+        assert_eq!(
+            request.headers.get("api-user-agent").map(String::as_str),
+            Some("Claude-User/1.0")
+        );
+        assert_eq!(
+            request.headers.get("accept").map(String::as_str),
+            Some("text/html")
+        );
     }
 }
