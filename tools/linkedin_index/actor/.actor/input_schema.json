@@ -101,6 +101,15 @@
             "maximum": 32,
             "default": 8,
             "prefill": 8
+        },
+        "attemptsPerUrl": {
+            "title": "Transient attempts per URL",
+            "description": "Maximum attempts for transient network/429/5xx responses. HTTP 999 and terminal 4xx responses stop immediately regardless of this value.",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 6,
+            "default": 3,
+            "prefill": 3
         }
     },
     "required": [
