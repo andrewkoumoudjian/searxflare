@@ -1,0 +1,109 @@
+{
+    "$schema": "https://apify.com/schemas/v1/input.ide.json",
+    "title": "LinkedIn UA-Spoof Crawler Input",
+    "type": "object",
+    "schemaVersion": 1,
+    "properties": {
+        "startUrls": {
+            "title": "Seed URLs (BFS roots)",
+            "description": "LinkedIn profile/company/pulse URLs to start crawling from. Example: https://www.linkedin.com/in/williamhgates",
+            "type": "array",
+            "editor": "requestListSources",
+            "prefill": [
+                {
+                    "url": "https://www.linkedin.com/in/williamhgates"
+                }
+            ]
+        },
+        "maxRequests": {
+            "title": "Max pages (no cap = 50000)",
+            "description": "Max pages to crawl in this run. No hard cap \u2014 set 50000 for uncapped BFS. Apify credits limit is the only cap.",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 500000,
+            "prefill": 5000,
+            "default": 5000
+        },
+        "maxDepth": {
+            "title": "Max BFS depth",
+            "description": "0 = seeds only, 1 = seeds + their LinkedIn links, 2+ = transitive. Cap 64 links/page. Depth 2 with 5 seeds \u2248 8k pages.",
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10,
+            "prefill": 2,
+            "default": 2
+        },
+        "maxLinksPerPage": {
+            "title": "Max LinkedIn links to enqueue per page",
+            "description": "Seaxflare caps 64. Lower = narrower BFS. 64 is recommended.",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 200,
+            "prefill": 64,
+            "default": 64
+        },
+        "spoofUserAgent": {
+            "title": "SPOOF_USER_AGENT",
+            "description": "UA spoof lever from searxflare ffec2c2. claude-user is optimal for LinkedIn (500-750k full SSR, ld+json). chrome/google also work. curl always 999 wall. Custom passes verbatim.",
+            "type": "string",
+            "editor": "select",
+            "enum": [
+                "claude-user",
+                "claude",
+                "google",
+                "openai",
+                "xai",
+                "gptbot",
+                "perplexity",
+                "googlebot",
+                "chrome",
+                "searxflare",
+                "curl",
+                "custom"
+            ],
+            "default": "claude-user",
+            "prefill": "claude-user"
+        },
+        "customUa": {
+            "title": "Custom UA (when spoof=custom)",
+            "description": "Verbatim UA string when spoofUserAgent=custom",
+            "type": "string",
+            "prefill": "",
+            "editor": "textfield"
+        },
+        "useApifyProxy": {
+            "title": "Proxy through Apify (keeps local IP clean)",
+            "description": "ON = egress via Apify proxy (auto datacenter). Proved 200 for Claude-User from cloud (100.48.66.211). OFF = direct egress (local IP). With your $85 dev credits, keep ON.",
+            "type": "boolean",
+            "prefill": true,
+            "default": true
+        },
+        "proxyGroups": {
+            "title": "Apify proxy groups",
+            "description": "Groups to use when proxy ON. auto = cheapest datacenter (proven 200 for LinkedIn). Use RESIDENTIAL only if datacenter gets wall.",
+            "type": "array",
+            "items": {
+                "type": "string"
+            },
+            "prefill": [
+                "auto"
+            ],
+            "default": [
+                "auto"
+            ],
+            "editor": "stringList"
+        },
+        "maxConcurrency": {
+            "title": "Concurrency",
+            "description": "Parallel pages. 5-10 is LinkedIn-safe. Higher hits 429 jitter threshold (jeffweiner08 429 after burst).",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 32,
+            "default": 8,
+            "prefill": 8
+        }
+    },
+    "required": [
+        "startUrls"
+    ]
+}

@@ -1,0 +1,15 @@
+{
+    "$schema": "https://apify.com/schemas/v1/actor.ide.json",
+    "actorSpecification": 1,
+    "name": "linkedin-crawler-actor",
+    "title": "LinkedIn UA-Spoof BFS Crawler \u2014 Full Content",
+    "description": "BFS LinkedIn crawler \u2014 UA spoof only (Claude-User), no cookies/voyager. Full HTML/ld+json/markdown, follows in|company|school|pulse links via Apify proxy. Qdrant hybrid optional.",
+    "version": "0.0",
+    "buildTag": "latest",
+    "meta": {
+        "templateId": "python-crawlee-beautifulsoup",
+        "searxflareCommit": "ffec2c2 UA spoof experiment"
+    },
+    "inputSchema": "./input_schema.json",
+    "dockerfile": "../Dockerfile"
+}
