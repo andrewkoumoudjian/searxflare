@@ -1,7 +1,13 @@
 from __future__ import annotations
 
+import os
+import json
 from collections.abc import Iterable, Sequence
 from typing import Any
+
+# FastEmbed uses only public models here. Do not let a stale local Hugging Face
+# credential turn a public model download into an authenticated 401.
+os.environ.setdefault("HF_HUB_DISABLE_IMPLICIT_TOKEN", "1")
 
 from fastembed import SparseTextEmbedding, TextEmbedding
 from qdrant_client import QdrantClient, models
@@ -13,6 +19,22 @@ COLLECTION_NAME = "linkedin-full"
 DENSE_MODEL = "BAAI/bge-small-en-v1.5"
 SPARSE_MODEL = "Qdrant/bm25"
 DENSE_SIZE = 384
+DENSE_TEXT_MAX_CHARS = 1000
+DEFAULT_MAX_BATCH_PAYLOAD_BYTES = 24 * 1024 * 1024
+PAYLOAD_INDEX_FIELDS = (
+    "url",
+    "aliases",
+    "entity_type",
+    "name",
+    "title",
+    "company",
+    "email",
+    "phone",
+    "location",
+    "industry",
+    "source_files",
+    "content_sources",
+)
 
 
 def _enum_value(value: Any) -> str:
@@ -55,16 +77,7 @@ class LinkedInIndex:
                     "sparse": models.SparseVectorParams(modifier=models.Modifier.IDF),
                 },
             )
-            for field_name in (
-                "url",
-                "entity_type",
-                "name",
-                "company",
-                "email",
-                "location",
-                "industry",
-                "source_files",
-            ):
+            for field_name in PAYLOAD_INDEX_FIELDS:
                 self.client.create_payload_index(
                     collection_name=COLLECTION_NAME,
                     field_name=field_name,
@@ -88,6 +101,15 @@ class LinkedInIndex:
                 f"existing {COLLECTION_NAME!r} collection is incompatible with "
                 f"dense={DENSE_MODEL}/{DENSE_SIZE}/cosine and sparse={SPARSE_MODEL}"
             )
+        payload_schema = getattr(info, "payload_schema", {}) or {}
+        for field_name in PAYLOAD_INDEX_FIELDS:
+            if field_name in payload_schema:
+                continue
+            self.client.create_payload_index(
+                collection_name=COLLECTION_NAME,
+                field_name=field_name,
+                field_schema=models.PayloadSchemaType.KEYWORD,
+            )
 
     @staticmethod
     def _sparse_vector(embedding: Any) -> models.SparseVector:
@@ -96,29 +118,59 @@ class LinkedInIndex:
             values=[float(value) for value in embedding.values.tolist()],
         )
 
-    def upsert(self, documents: Sequence[IndexDocument], *, batch_size: int = 64) -> int:
+    def upsert(
+        self,
+        documents: Sequence[IndexDocument],
+        *,
+        batch_size: int = 64,
+        include_dense: bool = True,
+        max_payload_bytes: int = DEFAULT_MAX_BATCH_PAYLOAD_BYTES,
+    ) -> int:
         if not documents:
             return 0
+        if batch_size < 1:
+            raise ValueError("batch size must be positive")
+        if max_payload_bytes < 1:
+            raise ValueError("max payload bytes must be positive")
         self.ensure_collection()
         inserted = 0
-        for start in range(0, len(documents), batch_size):
-            batch = documents[start : start + batch_size]
+        batches: list[list[IndexDocument]] = []
+        current: list[IndexDocument] = []
+        current_bytes = 0
+        for document in documents:
+            payload_bytes = len(
+                json.dumps(document.payload, ensure_ascii=False, separators=(",", ":"), default=str).encode("utf-8")
+            )
+            if current and (len(current) >= batch_size or current_bytes + payload_bytes > max_payload_bytes):
+                batches.append(current)
+                current = []
+                current_bytes = 0
+            current.append(document)
+            current_bytes += payload_bytes
+        if current:
+            batches.append(current)
+
+        for batch in batches:
             texts = [document.text for document in batch]
-            dense_vectors = list(self.dense_embedder.embed(texts))
+            dense_texts = [text[:DENSE_TEXT_MAX_CHARS] for text in texts]
+            dense_vectors = list(self.dense_embedder.embed(dense_texts)) if include_dense else [None] * len(batch)
             sparse_vectors = list(self.sparse_embedder.embed(texts))
             if len(dense_vectors) != len(batch) or len(sparse_vectors) != len(batch):
                 raise RuntimeError("embedding count did not match document count")
-            points = [
-                models.PointStruct(
-                    id=point_id(document.url),
-                    vector={
-                        "dense": [float(value) for value in dense.tolist()],
-                        "sparse": self._sparse_vector(sparse),
-                    },
-                    payload=document.payload,
+            points = []
+            for document, dense, sparse in zip(batch, dense_vectors, sparse_vectors, strict=True):
+                vectors: dict[str, Any] = {
+                    "sparse": self._sparse_vector(sparse),
+                }
+                if dense is not None:
+                    vectors["dense"] = [float(value) for value in dense.tolist()]
+                points.append(
+                    models.PointStruct(
+                        id=point_id(document.url),
+                        vector=vectors,
+                        payload=document.payload,
+                    )
                 )
-                for document, dense, sparse in zip(batch, dense_vectors, sparse_vectors, strict=True)
-            ]
             self.client.upsert(
                 collection_name=COLLECTION_NAME,
                 points=points,
@@ -167,4 +219,3 @@ class LinkedInIndex:
             }
             for point in response.points
         ]
-

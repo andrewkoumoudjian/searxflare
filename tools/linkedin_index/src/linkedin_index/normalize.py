@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import re
 from typing import Any, Iterable
+from urllib.parse import unquote
 
 from .canonical import canonical_linkedin_url
 
@@ -79,3 +81,106 @@ def merge_records(rows: Iterable[SourceRecord]) -> dict[str, NormalizedEntity]:
                 values.append(candidate)
     return entities
 
+
+def _normalized_field_name(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "", value.casefold())
+
+
+def _stable_person_ids(entity: NormalizedEntity) -> set[str]:
+    stable_keys = {"apollocontactid", "apollorecordid"}
+    ids: set[str] = set()
+    for field_name, values in entity.fields.items():
+        if _normalized_field_name(field_name) not in stable_keys:
+            continue
+        for item in values:
+            if _is_nonempty(item.value):
+                ids.add(str(item.value).strip())
+    return ids
+
+
+def _name_tokens(entity: NormalizedEntity) -> set[str]:
+    raw_values = entity.fields.get("name", [])
+    for item in raw_values:
+        if not _is_nonempty(item.value):
+            continue
+        return {
+            token
+            for token in re.findall(r"[a-z0-9]+", str(item.value).casefold())
+            if len(token) > 1
+        }
+    return set()
+
+
+def _alias_quality(url: str, entity: NormalizedEntity) -> tuple[int, int, int, str]:
+    slug = unquote(url.rsplit("/", 1)[-1]).casefold()
+    slug_tokens = set(re.findall(r"[a-z0-9]+", slug))
+    name_tokens = _name_tokens(entity)
+    overlap = len(name_tokens & slug_tokens)
+    malformed_penalty = int(len(slug) <= 3)
+    return (overlap, -malformed_penalty, len(slug), url)
+
+
+def collapse_person_aliases(
+    entities: dict[str, NormalizedEntity],
+) -> dict[str, NormalizedEntity]:
+    """Merge person URLs that share a stable Apollo contact/record identity."""
+    result = dict(entities)
+    person_urls = [url for url, entity in result.items() if entity.entity_type == "person"]
+
+    parent = {url: url for url in person_urls}
+
+    def find(url: str) -> str:
+        while parent[url] != url:
+            parent[url] = parent[parent[url]]
+            url = parent[url]
+        return url
+
+    def union(left: str, right: str) -> None:
+        root_left, root_right = find(left), find(right)
+        if root_left != root_right:
+            parent[root_right] = root_left
+
+    first_by_identity: dict[str, str] = {}
+    for url in person_urls:
+        for stable_id in sorted(_stable_person_ids(result[url])):
+            prior = first_by_identity.get(stable_id)
+            if prior is None:
+                first_by_identity[stable_id] = url
+            else:
+                union(prior, url)
+
+    components: dict[str, list[str]] = {}
+    for url in person_urls:
+        components.setdefault(find(url), []).append(url)
+
+    for urls in components.values():
+        if len(urls) < 2:
+            continue
+        representative_url = max(urls, key=lambda url: _alias_quality(url, result[url]))
+        representative = result[representative_url]
+
+        for alias_url in sorted(urls):
+            if alias_url == representative_url:
+                continue
+            alias = result[alias_url]
+            for field_name, values in alias.fields.items():
+                target = representative.fields.setdefault(field_name, [])
+                for value in values:
+                    if value not in target:
+                        target.append(value)
+            for source_record in alias.source_records:
+                if source_record not in representative.source_records:
+                    representative.source_records.append(source_record)
+
+            provenance = alias.source_records[0] if alias.source_records else None
+            aliases = representative.fields.setdefault("linkedin_url_alias", [])
+            candidate = ProvenancedValue(
+                value=alias_url,
+                source_file=provenance.source_file if provenance else "",
+                row_number=provenance.row_number if provenance else 0,
+            )
+            if candidate not in aliases:
+                aliases.append(candidate)
+            result.pop(alias_url, None)
+
+    return result

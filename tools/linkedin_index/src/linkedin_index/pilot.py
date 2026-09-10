@@ -5,6 +5,7 @@ import hashlib
 import json
 import subprocess
 import tempfile
+import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Iterable, Sequence
@@ -135,9 +136,38 @@ class PilotManifest:
         temp.replace(self.path)
 
 
-def _run_json(command: list[str]) -> dict:
-    result = subprocess.run(command, check=True, text=True, capture_output=True)
-    return json.loads(result.stdout)
+def _run_json(command: list[str], *, retries: int = 0) -> dict:
+    attempt = 0
+    while True:
+        result = subprocess.run(command, check=False, text=True, capture_output=True)
+        payload: dict | None = None
+        if result.stdout.strip():
+            try:
+                decoded = json.loads(result.stdout)
+            except json.JSONDecodeError:
+                decoded = None
+            if isinstance(decoded, dict):
+                payload = decoded
+        if result.returncode == 0:
+            if payload is None:
+                raise RuntimeError(
+                    f"command succeeded without JSON output: {command!r}; stderr={result.stderr.strip()!r}"
+                )
+            return payload
+        # Some CLI failures can happen after an Actor run was accepted. If a concrete
+        # run id is present, adopt it instead of issuing a duplicate start request.
+        run = payload.get("run") if isinstance(payload, dict) else None
+        if isinstance(run, dict) and isinstance(run.get("id"), str):
+            return payload
+        if attempt >= retries:
+            raise subprocess.CalledProcessError(
+                result.returncode,
+                command,
+                output=result.stdout,
+                stderr=result.stderr,
+            )
+        attempt += 1
+        time.sleep(1.0)
 
 
 def _find_key(value: object, key: str) -> object | None:
@@ -154,6 +184,16 @@ def _find_key(value: object, key: str) -> object | None:
             if found is not None:
                 return found
     return None
+
+
+def extract_run_id(payload: dict) -> str:
+    run = payload.get("run")
+    if isinstance(run, dict) and isinstance(run.get("id"), str):
+        return run["id"]
+    run_id = payload.get("runId")
+    if isinstance(run_id, str):
+        return run_id
+    raise RuntimeError(f"Apify start response did not contain a run id: {payload}")
 
 
 def _actor_input(chunk: PilotChunk, concurrency: int, attempts: int) -> dict:
@@ -187,12 +227,10 @@ def _start_chunk(actor_id: str, chunk: PilotChunk, out_dir: Path, concurrency: i
             "--timeout",
             str(timeout),
             "--json",
-        ]
+        ],
+        retries=1,
     )
-    run_id = _find_key(payload, "id")
-    if not isinstance(run_id, str):
-        raise RuntimeError(f"Apify start response did not contain a run id: {payload}")
-    return run_id
+    return extract_run_id(payload)
 
 
 def _wait_for_run(run_id: str, timeout: int) -> dict:
@@ -261,9 +299,70 @@ def _load_seed_file(path: Path) -> list[str]:
     return [line.strip() for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
 
 
+def _load_dataset_rows(path: Path) -> list[dict]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if isinstance(payload, dict):
+        return [payload]
+    if isinstance(payload, list) and all(isinstance(item, dict) for item in payload):
+        return [dict(item) for item in payload]
+    raise ValueError(f"dataset {path} must contain a JSON object or array of objects")
+
+
+def recovery_seeds_from_manifest(
+    manifest_path: str | Path,
+    *,
+    statuses: set[int] | None = None,
+) -> list[str]:
+    retry_statuses = statuses or {999}
+    raw = json.loads(Path(manifest_path).read_text(encoding="utf-8"))
+    chunks = raw.get("chunks", []) if isinstance(raw, dict) else []
+    rows: list[dict] = []
+    for chunk in chunks:
+        if not isinstance(chunk, dict) or chunk.get("status") != "SUCCEEDED":
+            continue
+        dataset_path = chunk.get("dataset_path")
+        if not isinstance(dataset_path, str) or not dataset_path:
+            continue
+        rows.extend(_load_dataset_rows(Path(dataset_path)))
+
+    successes: set[str] = set()
+    for row in rows:
+        try:
+            status = int(row.get("status"))
+        except (TypeError, ValueError):
+            continue
+        if status != 200 or row.get("fetched") is False:
+            continue
+        canonical = canonical_linkedin_url(str(row.get("url") or ""))
+        if canonical:
+            successes.add(canonical)
+
+    recovery: list[str] = []
+    seen: set[str] = set()
+    for row in rows:
+        try:
+            status = int(row.get("status"))
+        except (TypeError, ValueError):
+            continue
+        if status not in retry_statuses:
+            continue
+        canonical = canonical_linkedin_url(str(row.get("url") or ""))
+        if not canonical or canonical in successes or canonical in seen:
+            continue
+        seen.add(canonical)
+        recovery.append(canonical)
+    return recovery
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Run a resumable depth-zero LinkedIn crawl on Apify")
-    parser.add_argument("--seeds", type=Path, required=True)
+    source = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument("--seeds", type=Path)
+    source.add_argument(
+        "--recover-manifest",
+        type=Path,
+        help="Build one delayed recovery pass from unresolved HTTP 999 rows in a completed manifest",
+    )
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--chunk-size", type=int, default=50)
     parser.add_argument("--concurrency", type=int, default=8)
@@ -272,7 +371,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--actor-id", default=DEFAULT_ACTOR_ID)
     args = parser.parse_args(argv)
 
-    chunks = chunk_seeds(_load_seed_file(args.seeds), args.chunk_size)
+    seeds = (
+        recovery_seeds_from_manifest(args.recover_manifest)
+        if args.recover_manifest is not None
+        else _load_seed_file(args.seeds)
+    )
+    chunks = chunk_seeds(seeds, args.chunk_size)
     manifest_path = args.out / "manifest.json"
     manifest = PilotManifest.load(manifest_path, chunks, actor_id=args.actor_id)
     manifest.save()

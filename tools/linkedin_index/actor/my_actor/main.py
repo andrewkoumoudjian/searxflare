@@ -10,8 +10,9 @@ import json
 import random
 import re
 import time
+import unicodedata
 from enum import Enum
-from urllib.parse import urljoin, urlsplit, urlunsplit
+from urllib.parse import quote, unquote, urljoin, urlsplit, urlunsplit
 
 import httpx
 from bs4 import BeautifulSoup
@@ -68,7 +69,12 @@ def canonical_url(url: str) -> str | None:
         return None
     if p.scheme not in ("http", "https") or "linkedin.com" not in p.netloc.lower():
         return None
-    path = p.path.rstrip("/")
+    raw_path = p.path.rstrip("/")
+    parts = raw_path.split("/")
+    if len(parts) != 3 or parts[0] != "" or parts[1] not in {"in", "company", "school", "pulse", "posts", "showcase"} or not parts[2]:
+        return None
+    slug = quote(unicodedata.normalize("NFC", unquote(parts[2])), safe="._~-")
+    path = f"/{parts[1]}/{slug}"
     if not LINKEDIN_LINK_RE.match(f"https://www.linkedin.com{path}/"):
         if not PERSON_PATH_RE.match(path):
             return None
@@ -146,7 +152,7 @@ def parse_page(url: str, html: str, ua_used: str, attempts: int) -> dict:
         "ldJson": ld_jsons,
         "text_len": len(text),
         "linksFound": len(links),
-        "_links": links,
+        "links": links,
     }
     return rec
 
@@ -170,7 +176,22 @@ def fail_record(url: str, status, attempts: int, uas_tried: list[str]) -> dict:
         "ldJson": [],
         "text_len": 0,
         "linksFound": 0,
+        "links": [],
     }
+
+
+def claim_frontier(
+    frontier: list[tuple[str, int]],
+    stats: dict[str, int | float],
+    *,
+    max_requests: int,
+) -> tuple[str, int] | None:
+    """Claim one real crawl request without counting idle workers as requests."""
+    if not frontier or int(stats.get("requested", 0)) >= max_requests:
+        return None
+    item = frontier.pop(0)
+    stats["requested"] = int(stats.get("requested", 0)) + 1
+    return item
 
 
 async def main() -> None:
@@ -235,7 +256,8 @@ async def main() -> None:
                     stats["ok200"] += 1
                     rec = parse_page(url, html, ua_key, attempt + 1)
                     rec["depth"] = depth
-                    links = rec.pop("_links")[:max_links]
+                    links = rec["links"][:max_links]
+                    rec["links"] = links
                     rec["linksFound"] = len(links)
                     await Actor.push_data(rec)
                     if depth < max_depth and links:
@@ -262,10 +284,9 @@ async def main() -> None:
         async def worker() -> None:
             while True:
                 async with lock:
-                    stats["requested"] += 1
-                    if stats["requested"] > max_requests or not frontier:
+                    item = claim_frontier(frontier, stats, max_requests=max_requests)
+                    if item is None:
                         return
-                    item = frontier.pop(0)
                 url, depth = item
                 async with sem:
                     await asyncio.sleep(inter_delay + random.uniform(0.5, 1.5))

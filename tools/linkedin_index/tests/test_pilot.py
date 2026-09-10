@@ -1,6 +1,16 @@
 from __future__ import annotations
 
-from linkedin_index.pilot import PilotManifest, chunk_digest, chunk_seeds
+import json
+import subprocess
+
+from linkedin_index import pilot as pilot_module
+from linkedin_index.pilot import (
+    PilotManifest,
+    chunk_digest,
+    chunk_seeds,
+    extract_run_id,
+    recovery_seeds_from_manifest,
+)
 
 
 def test_chunk_seeds_canonicalizes_deduplicates_and_is_stable():
@@ -60,3 +70,68 @@ def test_manifest_requeues_failed_and_changed_chunks(tmp_path):
     assert [chunk.index for chunk in resumed_changed.pending_chunks()] == [0]
     assert resumed_changed.chunks[0].digest == chunk_digest(changed[0])
 
+
+def test_recovery_seeds_from_manifest_excludes_aliases_that_succeeded(tmp_path):
+    primary = tmp_path / "primary"
+    primary.mkdir()
+    (primary / "chunk-000.json").write_text(
+        """[
+          {"url":"https://www.linkedin.com/in/s%c3%a9rgio", "status":999, "fetched":false},
+          {"url":"https://www.linkedin.com/in/sérgio", "status":200, "fetched":true},
+          {"url":"https://www.linkedin.com/in/blocked", "status":999, "fetched":false},
+          {"url":"https://www.linkedin.com/in/gone", "status":404, "fetched":false}
+        ]""",
+        encoding="utf-8",
+    )
+    manifest = {
+        "chunks": [
+            {
+                "index": 0,
+                "digest": "x",
+                "seeds": [],
+                "status": "SUCCEEDED",
+                "dataset_path": str(primary / "chunk-000.json"),
+            }
+        ]
+    }
+    manifest_path = primary / "manifest.json"
+    manifest_path.write_text(__import__("json").dumps(manifest), encoding="utf-8")
+
+    assert recovery_seeds_from_manifest(manifest_path) == [
+        "https://www.linkedin.com/in/blocked"
+    ]
+
+
+def test_extract_run_id_prefers_run_object_over_actor_id():
+    payload = {
+        "actor": {"id": "TmxkNceI631zStdDV"},
+        "run": {"id": "actual-run-id", "status": "READY"},
+    }
+    assert extract_run_id(payload) == "actual-run-id"
+
+
+def test_run_json_retries_once_when_cli_fails_without_a_run(monkeypatch):
+    results = iter(
+        [
+            subprocess.CompletedProcess(["apify"], 1, stdout="", stderr="temporary start failure"),
+            subprocess.CompletedProcess(
+                ["apify"],
+                0,
+                stdout=json.dumps({"run": {"id": "run-after-retry"}}),
+                stderr="",
+            ),
+        ]
+    )
+    calls = []
+
+    def fake_run(*args, **kwargs):
+        calls.append((args, kwargs))
+        return next(results)
+
+    monkeypatch.setattr(pilot_module.subprocess, "run", fake_run)
+    monkeypatch.setattr(pilot_module.time, "sleep", lambda _seconds: None)
+
+    payload = pilot_module._run_json(["apify", "actors", "start"], retries=1)
+
+    assert payload["run"]["id"] == "run-after-retry"
+    assert len(calls) == 2

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from urllib.parse import urlsplit, urlunsplit
+import unicodedata
+from urllib.parse import quote, unquote, urlsplit, urlunsplit
 
 
 _SUPPORTED_ROOTS = {"in", "company", "school", "pulse", "posts", "showcase"}
@@ -38,6 +39,9 @@ def canonical_linkedin_url(value: str) -> str | None:
     if len(parts) != 3 or parts[0] != "" or parts[1] not in _SUPPORTED_ROOTS or not parts[2]:
         return None
 
-    # Preserve the path exactly as supplied so percent-encoded slug bytes are stable.
-    return urlunsplit(("https", "www.linkedin.com", path, "", ""))
-
+    # Normalize one entity slug without decoding path separators into structure.
+    # This collapses Unicode and percent-encoded aliases and canonicalizes percent
+    # escapes to uppercase hex, which LinkedIn serves more consistently.
+    slug = quote(unicodedata.normalize("NFC", unquote(parts[2])), safe="._~-")
+    normalized_path = f"/{parts[1]}/{slug}"
+    return urlunsplit(("https", "www.linkedin.com", normalized_path, "", ""))
